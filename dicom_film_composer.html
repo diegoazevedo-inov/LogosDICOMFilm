@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LOGOS DICOMFilm v4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep:#07070e; --bg-base:#0d0d18; --bg-panel:#131320; --bg-card:#1a1a2e; --bg-hover:#222240; --bg-active:#2a2a4a;
+  --border:#2a2a3e; --border-light:#3a3a55; --text-primary:#d8d8e8; --text-secondary:#8888a8; --text-dim:#555570;
+  --accent:#00b4d8; --accent-dim:#006880; --accent-glow:rgba(0,180,216,.15); --success:#00c853; --warning:#ffab00; --danger:#ff3d71;
+  --font-ui:'IBM Plex Sans',-apple-system,sans-serif; --font-mono:'IBM Plex Mono','SF Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font-ui);background:var(--bg-deep);color:var(--text-primary)}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg-base)}::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:3px}
+.app-header{height:48px;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px}
+.app-logo{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent);letter-spacing:1px}.app-logo span{color:var(--text-dim);font-weight:400}
+.app-version{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);background:var(--bg-active);padding:2px 6px;border-radius:3px}
+.header-divider{width:1px;height:24px;background:var(--border)}.header-info{font-size:12px;color:var(--text-secondary);font-family:var(--font-mono)}
+.step-indicator{display:flex;gap:4px;align-items:center;margin-left:auto}.step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .3s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}
+.btn{font-family:var(--font-ui);font-size:12px;font-weight:500;padding:6px 16px;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--text-primary);cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}.btn:hover{background:var(--bg-hover);border-color:var(--border-light)}.btn-primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:600}.btn-primary:hover{background:#00c8f0}.btn-primary:disabled{opacity:.4;cursor:not-allowed}.btn-danger{border-color:var(--danger);color:var(--danger)}.btn-danger:hover{background:rgba(255,61,113,.1)}.btn-success{border-color:var(--success);color:var(--success)}.btn-success:hover{background:rgba(0,200,83,.1)}.btn-sm{padding:4px 10px;font-size:11px}
+.screen{display:none;height:calc(100vh - 48px)}.screen.active{display:flex}
+#screen-upload{flex-direction:column;align-items:center;justify-content:center;gap:24px}
+.upload-zone{width:560px;max-width:90vw;padding:60px 40px;border:2px dashed var(--border);border-radius:12px;text-align:center;cursor:pointer;transition:all .3s;background:var(--bg-panel)}.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:var(--accent-glow)}
+.upload-icon{font-size:48px;margin-bottom:16px;opacity:.6}.upload-title{font-size:18px;font-weight:600;margin-bottom:8px}.upload-sub{font-size:13px;color:var(--text-secondary);line-height:1.6}.upload-sub kbd{background:var(--bg-active);padding:2px 6px;border-radius:3px;font-family:var(--font-mono);font-size:11px}.upload-input{display:none}
+.progress-container{width:560px;max-width:90vw;display:none}.progress-bar-outer{height:4px;background:var(--bg-card);border-radius:2px;overflow:hidden}.progress-bar-inner{height:100%;background:var(--accent);width:0;transition:width .2s;border-radius:2px}.progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px;font-family:var(--font-mono);text-align:center}.parse-stats{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);margin-top:8px;text-align:center;line-height:1.8}.parse-stats .ok{color:var(--success)}.parse-stats .warn{color:var(--warning)}.parse-stats .err{color:var(--danger)}
+#screen-series{flex-direction:column}.patient-banner{padding:12px 20px;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:24px;font-family:var(--font-mono);font-size:12px;flex-shrink:0;flex-wrap:wrap}.patient-banner .label{color:var(--text-dim);margin-right:4px}.patient-banner .value{color:var(--text-primary);font-weight:500}
+.series-toolbar{padding:10px 20px;background:var(--bg-base);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap}.series-toolbar .title{font-size:13px;font-weight:600}.series-count{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);background:var(--bg-card);padding:2px 8px;border-radius:10px}
+.series-grid{flex:1;overflow-y:auto;padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-content:start}.series-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .2s;position:relative}.series-card:hover{border-color:var(--border-light);transform:translateY(-1px)}.series-card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.series-card .check{position:absolute;top:8px;right:8px;width:22px;height:22px;border:2px solid var(--border-light);border-radius:4px;background:var(--bg-panel);display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2;transition:all .2s}.series-card.selected .check{background:var(--accent);border-color:var(--accent);color:#000}.series-thumb{width:100%;aspect-ratio:1;background:#000;display:flex;align-items:center;justify-content:center}.series-thumb canvas{max-width:100%;max-height:100%}.series-info{position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:rgba(0,0,0,0.7);display:flex;flex-direction:column;gap:2px;z-index:3}.series-desc{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}.series-meta{font-family:var(--font-mono);font-size:9px;color:#ddd;display:flex;gap:8px;flex-wrap:wrap}.series-meta .mod{color:var(--accent);font-weight:600}
+#screen-config{flex-direction:row}.config-sidebar{width:355px;background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}.config-section{padding:14px 16px;border-bottom:1px solid var(--border)}.config-section-title{font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}.config-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}.config-label{font-size:12px;color:var(--text-secondary);min-width:60px}
+.layout-options{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.layout-opt{aspect-ratio:1;background:var(--bg-base);border:1px solid var(--border);border-radius:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:all .2s;padding:3px}.layout-opt:hover{border-color:var(--border-light)}.layout-opt.selected{border-color:var(--accent);background:var(--accent-glow)}.layout-opt .grid-preview{display:grid;gap:1px;width:70%;aspect-ratio:1}.layout-opt .grid-preview .cell{background:var(--text-dim);border-radius:1px}.layout-opt.selected .grid-preview .cell{background:var(--accent)}.layout-opt .grid-label{font-size:9px;font-family:var(--font-mono);color:var(--text-dim);margin-top:1px}.layout-opt.selected .grid-label{color:var(--accent)}
+input[type="number"],select{font-family:var(--font-mono);font-size:12px;background:var(--bg-base);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;width:72px}input[type="number"]:focus,select:focus,.clinic-input:focus{outline:none;border-color:var(--accent)}select{width:auto;cursor:pointer}
+.series-tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--border);flex-shrink:0}.series-tab{padding:8px 16px;font-size:11px;font-family:var(--font-mono);color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s}.series-tab:hover{color:var(--text-primary)}.series-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.wl-presets,.fit-mode-opts,.film-size-opts,.chip-opts{display:flex;flex-wrap:wrap;gap:4px}.wl-preset,.chip{font-family:var(--font-mono);font-size:10px;padding:3px 8px;background:var(--bg-base);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--text-secondary);transition:all .2s}.wl-preset:hover,.chip:hover{border-color:var(--border-light);color:var(--text-primary)}.wl-preset.selected,.chip.selected{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+.img-count-badge{display:inline-block;background:var(--accent-glow);border:1px solid var(--accent-dim);color:var(--accent);font-family:var(--font-mono);font-size:11px;padding:2px 8px;border-radius:10px;margin-top:4px}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}.toggle{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}.toggle.on{background:var(--accent)}.toggle::after{content:'';width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:all .2s}.toggle.on::after{left:18px}.toggle-label{font-size:12px;color:var(--text-secondary)}
+.clinic-input{font-family:var(--font-mono);font-size:11px;background:var(--bg-base);border:1px solid var(--border);color:var(--text-primary);padding:4px 8px;border-radius:4px;width:100%}
+.preview-area{flex:1;overflow-y:auto;background:var(--bg-deep);padding:20px;display:flex;flex-direction:column;align-items:center;gap:16px}.film-sheet{background:#000;border:1px solid var(--border);position:relative;flex-shrink:0;overflow:hidden}.film-header-bar,.film-footer-bar{position:absolute;left:0;right:0;padding:5px 8px;font-family:var(--font-mono);font-size:8px;color:rgba(255,255,255,.75);display:flex;justify-content:space-between;z-index:2;pointer-events:none}.film-header-bar{top:0;background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent)}.film-footer-bar{bottom:0;background:linear-gradient(to top,rgba(0,0,0,.6),transparent)}.film-grid{display:grid;width:100%;height:100%}.film-cell{background:#000;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.film-cell canvas,.film-cell img{display:block}.film-cell-label{position:absolute;bottom:1px;left:3px;font-family:var(--font-mono);font-size:7px;color:rgba(255,255,255,.45)}.film-page-label{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);text-align:center}.no-preview{color:var(--text-dim);font-size:13px;text-align:center;margin-top:80px}
+.export-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}.export-overlay.active{display:flex}.export-overlay .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}.export-overlay .msg{font-family:var(--font-mono);font-size:13px;color:var(--text-secondary)}@keyframes spin{to{transform:rotate(360deg)}}
+@media print{html,body{height:auto!important;overflow:visible!important;display:block!important}#screen-upload,#screen-series,.app-header,.config-sidebar,.film-page-label,.no-preview,.btn,.export-overlay,.patient-banner,.series-toolbar,.header-info,.step-indicator{display:none!important}.screen{display:block!important;height:auto!important;overflow:visible!important}.page-controls{display:block!important;height:auto!important;overflow:visible!important;margin:0!important;padding:0!important;gap:0!important}#screen-config{display:block!important;height:auto!important;overflow:visible!important}.preview-area{display:block!important;height:auto!important;overflow:visible!important;padding:0!important;gap:0!important;background:transparent!important}.film-sheet{display:block!important;page-break-after:always!important;break-after:page!important;page-break-inside:avoid!important;break-inside:avoid!important;margin:0 auto!important;box-shadow:none!important;border:none!important;max-height:98vh!important;max-width:100%!important;object-fit:contain!important}.page-controls:last-child .film-sheet,.film-sheet:last-child{page-break-after:auto!important;break-after:auto!important}div.film-sheet.excluded-sheet{display:none!important}}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="app-logo">LOGOS<span>DICOMFilm</span></div>
+  <div class="app-version">v4</div>
+  <div class="header-divider"></div>
+  <div class="header-info" id="headerInfo">Film Composer</div>
+  <div class="step-indicator">
+    <div class="step-dot active"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+  </div>
+</header>
+
+<div class="screen active" id="screen-upload">
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">⬆</div>
+    <div class="upload-title">LOGOS DICOMFilm v4</div>
+    <div class="upload-sub">
+      Arraste um arquivo <kbd>.zip</kbd> contendo imagens DICOM ou clique para selecionar<br><br>
+      Suporte real: Implicit VR LE / Explicit VR LE não comprimidos<br>
+      Big Endian, Deflated e sintaxes comprimidas serão identificadas e reportadas
+    </div>
+    <input type="file" class="upload-input" id="fileInput" accept=".zip" />
+  </div>
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div></div>
+    <div class="progress-text" id="progressText">Carregando...</div>
+    <div class="parse-stats" id="parseStats"></div>
+  </div>
+  <div style="margin-top: 40px; font-size: 11px; color: var(--text-dim); text-align: center; max-width: 600px; line-height: 1.5; padding: 10px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg-card);">
+    <strong>Apache License 2.0</strong><br>
+    Copyright 2024-2026 <span style="color: var(--accent); font-weight: 600;">Diêgo Azevedo</span> — Especialista em Saúde Digital e IA.<br>
+    Licenciado sob a <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" style="color:var(--accent)">Apache License 2.0</a>.
+  </div>
+</div>
+
+<div class="screen" id="screen-series">
+  <div class="patient-banner" id="patientBanner"></div>
+  <div class="series-toolbar">
+    <span class="title">Séries do Estudo</span>
+    <span class="series-count" id="seriesCount"></span>
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" onclick="selectAllSeries()">Selecionar Todas</button>
+    <button class="btn btn-sm" onclick="deselectAllSeries()">Limpar</button>
+    <button class="btn btn-sm btn-danger" onclick="resetApp()">← Novo Estudo</button>
+    <button class="btn btn-primary btn-sm" id="btnConfigure" onclick="goToConfigure()" disabled>Configurar Impressão →</button>
+  </div>
+  <div class="series-grid" id="seriesGrid"></div>
+</div>
+
+<div class="screen" id="screen-config">
+  <div class="config-sidebar">
+    <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
+      <button class="btn btn-sm" style="flex:1" onclick="goToScreen(1)">← Séries</button>
+      <button class="btn btn-sm btn-danger" style="flex:1" onclick="resetApp()">Novo Estudo</button>
+    </div>
+    <div class="series-tabs" id="seriesTabs"></div>
+
+    <div class="config-section">
+      <div class="config-section-title">Layout do Filme</div>
+      <div class="layout-options" id="layoutOptions"></div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Intervalo de Imagens</div>
+      <div class="config-row">
+        <span class="config-label">Início:</span>
+        <input type="number" id="imgStart" min="1" value="1" onchange="updateRange()" />
+        <span class="config-label">Fim:</span>
+        <input type="number" id="imgEnd" min="1" value="1" onchange="updateRange()" />
+      </div>
+      <div class="config-row">
+        <span class="config-label">Pular:</span>
+        <input type="number" id="imgSkip" min="1" value="1" onchange="updateRange()" />
+        <span class="config-label" style="min-width:auto">imagens</span>
+      </div>
+      <div class="img-count-badge" id="imgCountBadge">0 imagens → 0 filmes</div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Window / Level</div>
+      <div class="wl-presets" id="wlPresets"></div>
+      <div style="margin-top:8px">
+        <div class="config-row">
+          <span class="config-label">Window:</span>
+          <input type="number" id="wlWindow" value="400" onchange="updateWL()" />
+          <span class="config-label">Level:</span>
+          <input type="number" id="wlLevel" value="40" onchange="updateWL()" />
+        </div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Exibição</div>
+      <div class="config-row">
+        <span class="config-label">Modo:</span>
+        <div class="fit-mode-opts" id="fitModeOpts"></div>
+      </div>
+      <div class="config-row">
+        <span class="config-label">Gutter:</span>
+        <input type="number" id="gutterPx" min="0" max="12" value="2" onchange="updateGutter()" style="width:50px" />
+        <span style="font-size:11px;color:var(--text-dim)">px</span>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle" id="invertToggle" onclick="toggleInvert()"></div>
+        <span class="toggle-label">Inverter (MONOCHROME1↔2)</span>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Opções de Página</div>
+      <div class="config-row">
+        <span class="config-label">Tamanho:</span>
+        <div class="film-size-opts" id="filmSizeOpts"></div>
+      </div>
+      <div class="config-row" style="margin-top:8px">
+        <span class="config-label">Papel:</span>
+        <div class="chip-opts" id="orientOpts"></div>
+      </div>
+      <div class="config-row" style="margin-top:8px">
+        <span class="config-label">Fundo:</span>
+        <div class="chip-opts" id="paperColorOpts"></div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Anotações & Identificação</div>
+      <div class="toggle-row">
+        <div class="toggle on" id="annotToggle" onclick="toggleAnnotations()"></div>
+        <span class="toggle-label">Dados do paciente</span>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle" id="anonToggle" onclick="toggleAnon()"></div>
+        <span class="toggle-label">Modo anonimizado forte</span>
+      </div>
+      <div style="margin-top:8px">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <label for="logoUpload" class="btn" style="padding: 4px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;">Upload Logo (JPG/PNG)</label>
+          <input type="file" id="logoUpload" accept="image/png, image/jpeg" style="display:none" onchange="handleLogoUpload(event)" />
+          <button class="btn" id="removeLogoBtn" style="display:none; padding: 4px 8px; font-size: 11px; width: 100%;" onclick="removeLogo()">Remover Logo</button>
+        </div>
+        <input class="clinic-input" id="clinicName" placeholder="Nome da clínica / hospital" oninput="renderFilmPreview()" style="width: 100%; box-sizing: border-box; text-align: center;" />
+      </div>
+    </div>
+
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;">
+      <button class="btn btn-success" style="width:100%" onclick="exportPDF()">📄 Exportar PDF</button>
+      <button class="btn btn-primary" style="width:100%" onclick="printFilms()">🖨 Imprimir</button>
+    </div>
+    <div style="font-size:9px; color:var(--text-dim); text-align:center; padding: 12px; border-top: 1px solid var(--border); line-height: 1.3;">
+      Apache License 2.0 — Copyright 2024-2026 <strong>Diêgo Azevedo</strong> · Saúde Digital e IA
+    </div>
+  </div>
+  <div class="preview-area" id="previewArea">
+    <div class="no-preview">Configure a série para visualizar o preview</div>
+  </div>
+</div>
+
+<div class="export-overlay" id="exportOverlay">
+  <div class="spinner"></div>
+  <div class="msg" id="exportMsg">Gerando PDF...</div>
+</div>
+
+<script>
+const TransferSupport = {
+  SUPPORTED: new Set([
+    '1.2.840.10008.1.2',
+    '1.2.840.10008.1.2.1',
+  ]),
+  UNSUPPORTED_UNCOMPRESSED: {
+    '1.2.840.10008.1.2.2': 'Explicit VR Big Endian',
+    '1.2.840.10008.1.2.1.99': 'Deflated Explicit VR Little Endian',
+  },
+  UNSUPPORTED_COMPRESSED: {
+    '1.2.840.10008.1.2.4.50': 'JPEG Baseline',
+    '1.2.840.10008.1.2.4.51': 'JPEG Extended',
+    '1.2.840.10008.1.2.4.57': 'JPEG Lossless',
+    '1.2.840.10008.1.2.4.70': 'JPEG Lossless SV1',
+    '1.2.840.10008.1.2.4.80': 'JPEG-LS Lossless',
+    '1.2.840.10008.1.2.4.81': 'JPEG-LS Near-Lossless',
+    '1.2.840.10008.1.2.4.90': 'JPEG 2000 Lossless',
+    '1.2.840.10008.1.2.4.91': 'JPEG 2000',
+    '1.2.840.10008.1.2.4.201': 'HTJ2K Lossless',
+    '1.2.840.10008.1.2.4.202': 'HTJ2K RPCL',
+    '1.2.840.10008.1.2.4.203': 'HTJ2K',
+    '1.2.840.10008.1.2.5': 'RLE Lossless',
+  },
+};
+
+const TAGS = {
+  MetaGroupLength:[0x0002,0x0000], TransferSyntaxUID:[0x0002,0x0010], Modality:[0x0008,0x0060], StudyDate:[0x0008,0x0020], StudyDescription:[0x0008,0x1030], SeriesDescription:[0x0008,0x103E], InstitutionName:[0x0008,0x0080], PatientName:[0x0010,0x0010], PatientID:[0x0010,0x0020], PatientBirthDate:[0x0010,0x0030], StudyInstanceUID:[0x0020,0x000D], SeriesInstanceUID:[0x0020,0x000E], InstanceNumber:[0x0020,0x0013], SeriesNumber:[0x0020,0x0011], Rows:[0x0028,0x0010], Columns:[0x0028,0x0011], BitsAllocated:[0x0028,0x0100], BitsStored:[0x0028,0x0101], HighBit:[0x0028,0x0102], PixelRepresentation:[0x0028,0x0103], SamplesPerPixel:[0x0028,0x0002], PhotometricInterp:[0x0028,0x0004], PlanarConfiguration:[0x0028,0x0006], WindowCenter:[0x0028,0x1050], WindowWidth:[0x0028,0x1051], RescaleIntercept:[0x0028,0x1052], RescaleSlope:[0x0028,0x1053], NumberOfFrames:[0x0028,0x0008], PixelData:[0x7FE0,0x0010],
+};
+const EXPLICIT_VR_LONG = new Set(['OB','OD','OF','OL','OW','SQ','UC','UN','UR','UT']);
+const VALUE_VR_MAP = { UI:'string', PN:'string', LO:'string', SH:'string', CS:'string', DA:'string', TM:'string', IS:'string', DS:'string', LT:'string', ST:'string', AE:'string', AS:'string', DT:'string', UC:'string', UR:'string', UT:'string', US:'us', SS:'ss', UL:'ul', SL:'sl' };
+const IMPLICIT_VR_HINTS = new Map();
+function tk(g,e){ return (g<<16)|e; }
+for (const [k,[g,e]] of Object.entries(TAGS)) {
+  if (['Rows','Columns','BitsAllocated','BitsStored','HighBit','PixelRepresentation','SamplesPerPixel','PlanarConfiguration'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'US');
+  if (['InstanceNumber','SeriesNumber'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'IS');
+  if (['WindowCenter','WindowWidth','RescaleIntercept','RescaleSlope'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'DS');
+  if (['NumberOfFrames'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'IS');
+}
+const TAG_MAP = {}; for (const [name,[g,e]] of Object.entries(TAGS)) TAG_MAP[tk(g,e)] = name;
+
+const LAYOUTS = [{c:1,r:1,l:'1×1'},{c:2,r:1,l:'2×1'},{c:1,r:2,l:'1×2'},{c:2,r:2,l:'2×2'},{c:2,r:3,l:'2×3'},{c:3,r:2,l:'3×2'},{c:3,r:3,l:'3×3'},{c:3,r:4,l:'3×4'},{c:4,r:3,l:'4×3'},{c:4,r:4,l:'4×4'},{c:4,r:5,l:'4×5'},{c:5,r:4,l:'5×4'},{c:5,r:5,l:'5×5'},{c:5,r:6,l:'5×6'},{c:6,r:5,l:'6×5'},{c:6,r:6,l:'6×6'}];
+const FILM_SIZES = [{label:'8×10"',w:203,h:254},{label:'10×12"',w:254,h:305},{label:'11×14"',w:279,h:356},{label:'14×14"',w:356,h:356},{label:'14×17"',w:356,h:432},{label:'A4',w:210,h:297},{label:'A3',w:297,h:420}];
+const WL_PRESETS = {
+  CT:[{l:'Abdome',ww:400,wl:40},{l:'Pulmão',ww:1500,wl:-600},{l:'Osso',ww:2000,wl:400},{l:'Cérebro',ww:80,wl:40},{l:'Mediastino',ww:350,wl:50},{l:'Fígado',ww:150,wl:70},{l:'Coluna',ww:300,wl:40}],
+  MR:[{l:'T1 Brain',ww:600,wl:300},{l:'T2 Brain',ww:800,wl:400},{l:'FLAIR',ww:1000,wl:500},{l:'Spine',ww:700,wl:350},{l:'Joint',ww:500,wl:250}],
+  DEFAULT:[{l:'Auto',ww:0,wl:0},{l:'Full Range',ww:4096,wl:2048}],
+};
+const FIT_MODES = ['contain', 'cover', 'stretch'];
+let clinicLogoDataUrl = null;
+
+function handleLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    clinicLogoDataUrl = ev.target.result;
+    document.getElementById('removeLogoBtn').style.display = 'block';
+    renderFilmPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo() {
+  clinicLogoDataUrl = null;
+  document.getElementById('logoUpload').value = '';
+  document.getElementById('removeLogoBtn').style.display = 'none';
+  renderFilmPreview();
+}
+
+function setSteps(idx){ document.querySelectorAll('.step-dot').forEach((d,i)=>d.className='step-dot'+(i<idx?' done':'')+(i===idx?' active':'')); }
+function setText(el, value){ el.textContent = value == null ? '' : String(value); }
+function formatDate(ds){ if(!ds || String(ds).length<8) return ds||''; ds=String(ds); return `${ds.slice(6,8)}/${ds.slice(4,6)}/${ds.slice(0,4)}`; }
+function sanitizeFilename(s){ return String(s||'DICOM').replace(/[^a-zA-Z0-9._-]/g,'_'); }
+
+function parsePersonName(v){ return String(v||'').replace(/\^/g,' ').trim(); }
+function parseMaybeMulti(v, cast='string') {
+  if (v == null) return null;
+  const parts = String(v).split('\\').map(x=>x.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  if (cast === 'number') return Number(parts[0]);
+  return parts[0];
+}
+
+function detectTransferSyntax(ts) {
+  const value = String(ts||'').trim();
+  if (!value) return { status:'unknown', label:'Desconhecida' };
+  if (TransferSupport.SUPPORTED.has(value)) return { status:'supported', label:value };
+  if (TransferSupport.UNSUPPORTED_UNCOMPRESSED[value]) return { status:'unsupported_uncompressed', label:TransferSupport.UNSUPPORTED_UNCOMPRESSED[value] };
+  if (TransferSupport.UNSUPPORTED_COMPRESSED[value]) return { status:'unsupported_compressed', label:TransferSupport.UNSUPPORTED_COMPRESSED[value] };
+  return { status:'unsupported_unknown', label:value };
+}
+
+function readString(dv, offset, length){ let s=''; for(let i=0;i<length;i++) s += String.fromCharCode(dv.getUint8(offset+i)); return s.replace(/\0/g,'').trim(); }
+
+function parseValue(dv, offset, length, vr, le) {
+  if (length <= 0) return null;
+  const kind = VALUE_VR_MAP[vr] || 'string';
+  if (kind === 'us') return length >= 2 ? dv.getUint16(offset, le) : null;
+  if (kind === 'ss') return length >= 2 ? dv.getInt16(offset, le) : null;
+  if (kind === 'ul') return length >= 4 ? dv.getUint32(offset, le) : null;
+  if (kind === 'sl') return length >= 4 ? dv.getInt32(offset, le) : null;
+  return readString(dv, offset, length);
+}
+
+function parseDicom(buffer) {
+  const len = buffer.byteLength;
+  if (len < 8) return { error:'too_small' };
+  const dv = new DataView(buffer);
+
+  let offset = 0;
+  let hasPreamble = false;
+  if (len >= 132 && String.fromCharCode(dv.getUint8(128),dv.getUint8(129),dv.getUint8(130),dv.getUint8(131)) === 'DICM') {
+    hasPreamble = true;
+    offset = 132;
+  }
+
+  if (!hasPreamble) {
+    const g = dv.getUint16(0, true);
+    if (g === 0 || g >= 0x7FFA) return { error:'inv_grp_' + g.toString(16).padStart(4,'0') };
+  }
+
+  const result = {};
+  let explicitVR = true;
+  let le = true;
+  let inMeta = false;
+  let metaEnd = Infinity;
+
+  if (offset + 4 <= len && dv.getUint16(offset, true) === 0x0002) {
+    inMeta = true;
+    if (offset + 12 <= len && dv.getUint16(offset+2,true) === 0x0000) {
+      const vr = String.fromCharCode(dv.getUint8(offset+4), dv.getUint8(offset+5));
+      if (vr === 'UL') {
+        const elementLength = dv.getUint16(offset+6, true);
+        if (elementLength === 4) metaEnd = offset + 12 + dv.getUint32(offset+8, true);
+      }
+    }
+  } else {
+    const vrChars = String.fromCharCode(dv.getUint8(offset+4), dv.getUint8(offset+5));
+    const validVRs = new Set(['AE','AS','AT','CS','DA','DS','DT','FD','FL','IS','LO','LT','OB','OD','OF','OL','OW','PN','SH','SL','SQ','SS','ST','TM','UC','UI','UL','UN','UR','US','UT']);
+    explicitVR = validVRs.has(vrChars);
+  }
+
+  while (offset + 8 <= len) {
+    let peekGroup = dv.getUint16(offset, inMeta ? true : le);
+    if (inMeta && (offset >= metaEnd || peekGroup > 2)) {
+      inMeta = false;
+      const ts = String(result.TransferSyntaxUID || '').trim();
+      const tsInfo = detectTransferSyntax(ts || '1.2.840.10008.1.2');
+      result._tsInfo = tsInfo;
+      if (tsInfo.status !== 'supported') {
+        result._unsupportedTS = true;
+        result._unsupportedTSLabel = tsInfo.label;
+      }
+      if (ts === '' || ts === '1.2.840.10008.1.2') { explicitVR = false; le = true; }
+      else if (ts === '1.2.840.10008.1.2.2') { explicitVR = true; le = false; }
+      else { explicitVR = true; le = true; }
+    }
+
+    const currentLE = inMeta ? true : le;
+    const group = dv.getUint16(offset, currentLE);
+    const elem = dv.getUint16(offset + 2, currentLE);
+    offset += 4;
+    const key = tk(group, elem);
+
+    if (group === 0x7FE0 && elem === 0x0010) {
+      let valueLength = 0;
+      if (inMeta || explicitVR) {
+        const vrStr = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1));
+        if (/^[A-Z]{2}$/.test(vrStr)) {
+          offset += 2;
+          if (EXPLICIT_VR_LONG.has(vrStr)) { offset += 2; valueLength = dv.getUint32(offset, currentLE); offset += 4; }
+          else { valueLength = dv.getUint16(offset, currentLE); offset += 2; }
+        } else {
+          valueLength = dv.getUint32(offset, currentLE); offset += 4;
+        }
+      } else {
+        valueLength = dv.getUint32(offset, currentLE); offset += 4;
+      }
+      result._pixelDataOffset = offset;
+      result._pixelDataLength = valueLength === 0xFFFFFFFF ? (len - offset) : valueLength;
+      break;
+    }
+
+    let vr = null;
+    let valueLength = 0;
+    if (inMeta || explicitVR) {
+      const vrStr = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1));
+      if (/^[A-Z]{2}$/.test(vrStr)) {
+        vr = vrStr;
+        offset += 2;
+        if (EXPLICIT_VR_LONG.has(vr)) { offset += 2; valueLength = dv.getUint32(offset, currentLE); offset += 4; }
+        else { valueLength = dv.getUint16(offset, currentLE); offset += 2; }
+      } else {
+        vr = IMPLICIT_VR_HINTS.get(key) || 'UN';
+        valueLength = dv.getUint32(offset, currentLE); offset += 4;
+      }
+    } else {
+      vr = IMPLICIT_VR_HINTS.get(key) || 'UN';
+      valueLength = dv.getUint32(offset, currentLE); offset += 4;
+    }
+
+    if (valueLength === 0xFFFFFFFF) {
+      let depth = 1;
+      while (offset + 8 <= len && depth > 0) {
+        let skip_sg = dv.getUint16(offset, currentLE);
+        let skip_se = dv.getUint16(offset + 2, currentLE);
+        offset += 4;
+        
+        if (skip_sg === 0xFFFE) {
+          let sl = dv.getUint32(offset, currentLE); 
+          offset += 4;
+          if (skip_se === 0xE0DD || skip_se === 0xE00D) {
+            depth--;
+          } else if (skip_se === 0xE000) {
+            if (sl === 0xFFFFFFFF) depth++;
+            else offset += sl;
+          }
+          continue;
+        }
+
+        let skip_len = 0;
+        if (explicitVR) {
+          const vrStr = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1));
+          if (/^[A-Z]{2}$/.test(vrStr)) {
+            offset += 2;
+            if (EXPLICIT_VR_LONG.has(vrStr)) { offset += 2; skip_len = dv.getUint32(offset, currentLE); offset += 4; }
+            else { skip_len = dv.getUint16(offset, currentLE); offset += 2; }
+          } else {
+            skip_len = dv.getUint32(offset, currentLE); offset += 4;
+          }
+        } else {
+          skip_len = dv.getUint32(offset, currentLE); offset += 4;
+        }
+        
+        if (skip_len === 0xFFFFFFFF) depth++;
+        else offset += skip_len;
+      }
+      continue;
+    }
+
+    if (offset + valueLength > len) break;
+    const tagName = TAG_MAP[key];
+    if (tagName) result[tagName] = parseValue(dv, offset, valueLength, vr, currentLE);
+    offset += valueLength;
+  }
+
+  result._buffer = buffer;
+  result._littleEndian = le;
+  result._explicitVR = explicitVR;
+
+  if (!result.Rows || !result.Columns) return { error:'no_image_dims', partial: result };
+  return result;
+}
+
+function signExtend(value, bitsStored) {
+  const sign = 1 << (bitsStored - 1);
+  const full = 1 << bitsStored;
+  return (value & sign) ? value - full : value;
+}
+
+function readRawSample(dv, baseOffset, bitsAllocated, littleEndian) {
+  if (bitsAllocated === 8) return dv.getUint8(baseOffset);
+  if (bitsAllocated === 16) return dv.getUint16(baseOffset, littleEndian);
+  return null;
+}
+
+function extractSample(raw, bitsStored, highBit, signed) {
+  if (raw == null) return null;
+  const shift = Math.max(0, highBit - bitsStored + 1);
+  let value = raw >> shift;
+  const mask = bitsStored >= 32 ? 0xFFFFFFFF : ((1 << bitsStored) - 1);
+  value = value & mask;
+  if (signed) value = signExtend(value, bitsStored);
+  return value;
+}
+
+const renderCache = new Map();
+function cacheSet(key, value) {
+  if (renderCache.size > 220) {
+    const first = renderCache.keys().next().value;
+    renderCache.delete(first);
+  }
+  renderCache.set(key, value);
+}
+
+function computeAutoWindow(dcm, frameIndex=0) {
+  const rows = dcm.Rows, cols = dcm.Columns;
+  const bitsAllocated = dcm.BitsAllocated || 16;
+  const bitsStored = dcm.BitsStored || bitsAllocated;
+  const highBit = dcm.HighBit != null ? dcm.HighBit : (bitsStored - 1);
+  const signed = (dcm.PixelRepresentation || 0) === 1;
+  const slope = parseFloat(parseMaybeMulti(dcm.RescaleSlope,'number')) || 1;
+  const intercept = parseFloat(parseMaybeMulti(dcm.RescaleIntercept,'number')) || 0;
+  const total = rows * cols;
+  const frameStride = total * (bitsAllocated / 8) * (dcm.SamplesPerPixel || 1);
+  const start = dcm._pixelDataOffset + frameStride * frameIndex;
+  const dv = new DataView(dcm._buffer);
+  let min = Infinity, max = -Infinity;
+  const step = Math.max(1, Math.floor(total / 2048));
+  for (let i = 0; i < total; i += step) {
+    const byteOffset = start + i * (bitsAllocated / 8);
+    if (byteOffset + (bitsAllocated/8) > dcm._buffer.byteLength) break;
+    const raw = readRawSample(dv, byteOffset, bitsAllocated, dcm._littleEndian !== false);
+    const sample = extractSample(raw, bitsStored, highBit, signed);
+    const value = sample * slope + intercept;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  if (!isFinite(min) || !isFinite(max) || min === max) return { ww: 400, wl: 40 };
+  return { ww: Math.max(1, max - min), wl: (max + min) / 2 };
+}
+
+function renderDicomToCanvas(dcm, canvas, ww, wl, invert=false, frameIndex=0) {
+  if (!dcm || !dcm._pixelDataOffset || dcm._unsupportedTS) return false;
+  const rows = dcm.Rows, cols = dcm.Columns;
+  const bitsAllocated = dcm.BitsAllocated || 16;
+  const bitsStored = dcm.BitsStored || bitsAllocated;
+  const highBit = dcm.HighBit != null ? dcm.HighBit : (bitsStored - 1);
+  const signed = (dcm.PixelRepresentation || 0) === 1;
+  const samples = dcm.SamplesPerPixel || 1;
+  const photo = String(dcm.PhotometricInterp || 'MONOCHROME2').trim().toUpperCase();
+  const planar = dcm.PlanarConfiguration || 0;
+  const slope = parseFloat(parseMaybeMulti(dcm.RescaleSlope,'number')) || 1;
+  const intercept = parseFloat(parseMaybeMulti(dcm.RescaleIntercept,'number')) || 0;
+  const total = rows * cols;
+  const bytesPerSample = bitsAllocated / 8;
+  const frameStride = total * samples * bytesPerSample;
+  const frameOffset = dcm._pixelDataOffset + frameStride * frameIndex;
+  const littleEndian = dcm._littleEndian !== false;
+  const cacheKey = [dcm._pixelDataOffset, dcm._pixelDataLength, rows, cols, ww, wl, invert, frameIndex].join('|');
+
+  canvas.width = cols; canvas.height = rows;
+  const ctx = canvas.getContext('2d');
+  const cached = renderCache.get(cacheKey);
+  if (cached) { ctx.putImageData(cached, 0, 0); return true; }
+
+  if (!ww || !wl) {
+    const pww = parseFloat(parseMaybeMulti(dcm.WindowWidth,'number'));
+    const pwl = parseFloat(parseMaybeMulti(dcm.WindowCenter,'number'));
+    if (pww && pwl != null) { ww = ww || pww; wl = wl || pwl; }
+    else { const auto = computeAutoWindow(dcm, frameIndex); ww = ww || auto.ww; wl = wl || auto.wl; }
+  }
+  if (!ww) ww = 400;
+  if (wl == null) wl = 40;
+
+  const lower = wl - ww / 2;
+  const upper = wl + ww / 2;
+  const range = Math.max(1, upper - lower);
+  const imgData = ctx.createImageData(cols, rows);
+  const dv = new DataView(dcm._buffer);
+  const isMono1 = photo.includes('MONOCHROME1');
+  const applyInvert = invert ? !isMono1 : isMono1;
+
+  if (samples === 1) {
+    for (let i = 0; i < total; i++) {
+      const byteOffset = frameOffset + i * bytesPerSample;
+      if (byteOffset + bytesPerSample > dcm._buffer.byteLength) break;
+      const raw = readRawSample(dv, byteOffset, bitsAllocated, littleEndian);
+      const sample = extractSample(raw, bitsStored, highBit, signed);
+      const value = sample * slope + intercept;
+      let gray = value <= lower ? 0 : value >= upper ? 255 : ((value - lower) / range) * 255;
+      if (applyInvert) gray = 255 - gray;
+      const idx = i * 4;
+      imgData.data[idx] = gray;
+      imgData.data[idx + 1] = gray;
+      imgData.data[idx + 2] = gray;
+      imgData.data[idx + 3] = 255;
+    }
+  } else if (samples === 3 && bitsAllocated === 8) {
+    if (planar === 0) {
+      for (let i = 0; i < total; i++) {
+        const base = frameOffset + i * 3;
+        if (base + 2 >= dcm._buffer.byteLength) break;
+        const idx = i * 4;
+        imgData.data[idx] = dv.getUint8(base);
+        imgData.data[idx + 1] = dv.getUint8(base + 1);
+        imgData.data[idx + 2] = dv.getUint8(base + 2);
+        imgData.data[idx + 3] = 255;
+      }
+    } else {
+      const planeSize = total;
+      for (let i = 0; i < total; i++) {
+        const idx = i * 4;
+        imgData.data[idx] = dv.getUint8(frameOffset + i);
+        imgData.data[idx + 1] = dv.getUint8(frameOffset + planeSize + i);
+        imgData.data[idx + 2] = dv.getUint8(frameOffset + planeSize * 2 + i);
+        imgData.data[idx + 3] = 255;
+      }
+    }
+  } else {
+    return false;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  cacheSet(cacheKey, imgData);
+  return true;
+}
+
+let state = {
+  screen:0,
+  study:null,
+  series:[],
+  selectedSeries:new Set(),
+  activeSeriesIdx:0,
+  configs:{},
+  showAnnotations:true,
+  anonymize:false,
+  parseStats:{ valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} },
+};
+
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const progressContainer = document.getElementById('progressContainer');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const parseStatsEl = document.getElementById('parseStats');
+const screens = ['screen-upload','screen-series','screen-config'];
+
+function goToScreen(idx){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(screens[idx]).classList.add('active'); state.screen = idx; setSteps(idx); if(idx===0) setText(document.getElementById('headerInfo'),'Film Composer'); }
+function resetApp(){ state.series.forEach(s=>s.images.forEach(i=>{ delete i._buffer; })); renderCache.clear(); state={screen:0,study:null,series:[],selectedSeries:new Set(),activeSeriesIdx:0,configs:{},showAnnotations:true,anonymize:false,parseStats:{ valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} }}; uploadZone.style.display=''; progressContainer.style.display='none'; parseStatsEl.innerHTML=''; fileInput.value=''; goToScreen(0); }
+
+uploadZone.addEventListener('click',()=>fileInput.click());
+uploadZone.addEventListener('dragover',e=>{ e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop',e=>{ e.preventDefault(); uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length) processZip(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) processZip(fileInput.files[0]); });
+
+async function processZip(file) {
+  if (!file.name.toLowerCase().endsWith('.zip')) { alert('Selecione um arquivo .zip'); return; }
+  uploadZone.style.display = 'none';
+  progressContainer.style.display = 'block';
+  progressBar.style.width = '5%';
+  setText(progressText, 'Lendo ZIP...');
+  parseStatsEl.innerHTML = '';
+
+  const stats = { valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} };
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const entries = Object.values(zip.files).filter(f => {
+      if (f.dir) return false;
+      const n = f.name.toLowerCase();
+      if (n.startsWith('__macosx') || /(^|\/)\./.test(n) || n.endsWith('dicomdir')) return false;
+      const ext = n.includes('.') ? n.split('.').pop() : '';
+      const nonDicomExt = new Set(['txt','xml','json','csv','html','htm','pdf','jpg','jpeg','png','gif','bmp','tif','tiff','mp4','mov','avi','log','ini','cfg']);
+      if (ext && nonDicomExt.has(ext)) { stats.ignored++; return false; }
+      return true;
+    });
+
+    progressBar.style.width = '15%';
+    setText(progressText, `Extraindo ${entries.length} arquivos...`);
+
+    const parsed = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const buf = await entry.async('arraybuffer');
+      if (buf.byteLength < 8) { stats.invalid++; stats.byReason['too_small']=(stats.byReason['too_small']||0)+1; continue; }
+      
+      const dcm = parseDicom(buf);
+      if (dcm.error) { 
+        stats.invalid++; 
+        stats.byReason[dcm.error] = (stats.byReason[dcm.error]||0)+1;
+      }
+      else if (dcm._unsupportedTS) {
+        const tsInfo = dcm._tsInfo || { status:'unsupported_unknown', label:'Desconhecida' };
+        if (tsInfo.status === 'unsupported_compressed') stats.unsupportedCompressed++;
+        else stats.unsupportedUncompressed++;
+        stats.byReason[tsInfo.label] = (stats.byReason[tsInfo.label] || 0) + 1;
+      } else { stats.valid++; parsed.push(dcm); }
+      progressBar.style.width = (15 + (i + 1) / entries.length * 70) + '%';
+      setText(progressText, `Parsing: ${i + 1}/${entries.length}`);
+      if ((i + 1) % 25 === 0) await new Promise(r=>setTimeout(r,0));
+    }
+
+    state.parseStats = stats;
+    renderParseStats(stats);
+
+    if (!parsed.length) {
+      progressBar.style.width = '100%';
+      setText(progressText, 'Nenhum DICOM elegível encontrado.');
+      return;
+    }
+
+    progressBar.style.width = '92%';
+    setText(progressText, 'Organizando estudo...');
+    organizeStudy(parsed);
+
+    progressBar.style.width = '100%';
+    setText(progressText, `${parsed.length} imagens em ${state.series.length} séries`);
+    await new Promise(r=>setTimeout(r,400));
+    renderSeriesScreen();
+    goToScreen(1);
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao processar ZIP: ' + err.message);
+    uploadZone.style.display = '';
+    progressContainer.style.display = 'none';
+  }
+}
+
+function renderParseStats(stats) {
+  const fragments = [];
+  fragments.push(`<span class="ok">✓ ${stats.valid} válidos</span>`);
+  if (stats.invalid) fragments.push(`<span class="err">✗ ${stats.invalid} inválidos</span>`);
+  if (stats.unsupportedCompressed) fragments.push(`<span class="warn">⚠ ${stats.unsupportedCompressed} comprimidos</span>`);
+  if (stats.unsupportedUncompressed) fragments.push(`<span class="warn">⚠ ${stats.unsupportedUncompressed} não suportados</span>`);
+  if (stats.ignored) fragments.push(`<span>${stats.ignored} ignorados</span>`);
+  parseStatsEl.innerHTML = fragments.join(' · ');
+  const reasons = Object.entries(stats.byReason);
+  if (reasons.length) {
+    const detail = document.createElement('div');
+    detail.style.marginTop = '6px';
+    detail.style.fontSize = '10px';
+    detail.style.lineHeight = '1.6';
+    reasons.forEach(([label, n]) => {
+      const row = document.createElement('div');
+      row.textContent = `${label}: ${n} arquivo${n > 1 ? 's' : ''}`;
+      detail.appendChild(row);
+    });
+    parseStatsEl.appendChild(detail);
+  }
+}
+
+function organizeStudy(dcmFiles) {
+  const first = dcmFiles[0];
+  state.study = {
+    patientName: parsePersonName(first.PatientName || 'Desconhecido'),
+    patientID: first.PatientID || '',
+    studyDate: formatDate(first.StudyDate),
+    studyDescription: first.StudyDescription || '',
+    institution: first.InstitutionName || '',
+    birthDate: formatDate(first.PatientBirthDate),
+  };
+
+  const seriesMap = new Map();
+  for (const dcm of dcmFiles) {
+    const uid = dcm.SeriesInstanceUID || 'unknown';
+    if (!seriesMap.has(uid)) {
+      seriesMap.set(uid, {
+        uid,
+        description: dcm.SeriesDescription || `Série ${dcm.SeriesNumber || '?'}`,
+        modality: dcm.Modality || '??',
+        number: parseInt(dcm.SeriesNumber) || 0,
+        images: [],
+        frames: 0,
+      });
+    }
+    const series = seriesMap.get(uid);
+    series.images.push(dcm);
+    series.frames += Math.max(1, parseInt(dcm.NumberOfFrames) || 1);
+  }
+
+  for (const s of seriesMap.values()) {
+    s.images.sort((a,b)=>(parseInt(a.InstanceNumber)||0) - (parseInt(b.InstanceNumber)||0));
+  }
+
+  state.series = [...seriesMap.values()].sort((a,b)=>a.number-b.number);
+  state.selectedSeries = new Set();
+  state.configs = {};
+}
+
+function renderSeriesScreen() {
+  const banner = document.getElementById('patientBanner');
+  banner.innerHTML = '';
+  [['PACIENTE', state.study.patientName], ['ID', state.study.patientID], ['DATA', state.study.studyDate], ['ESTUDO', state.study.studyDescription], ['INST', state.study.institution]].forEach(([label, value]) => {
+    const span = document.createElement('span');
+    const l = document.createElement('span'); l.className = 'label'; l.textContent = label;
+    const v = document.createElement('span'); v.className = 'value'; v.textContent = value || '';
+    span.append(l, document.createTextNode(' '), v);
+    banner.appendChild(span);
+  });
+  setText(document.getElementById('headerInfo'), `${state.study.patientName} — ${state.study.studyDate}`);
+  setText(document.getElementById('seriesCount'), `${state.series.length} séries`);
+
+  const grid = document.getElementById('seriesGrid');
+  grid.innerHTML = '';
+  state.series.forEach(series => {
+    const card = document.createElement('div');
+    card.className = 'series-card' + (state.selectedSeries.has(series.uid) ? ' selected' : '');
+    card.onclick = () => {
+      if (state.selectedSeries.has(series.uid)) state.selectedSeries.delete(series.uid);
+      else state.selectedSeries.add(series.uid);
+      renderSeriesScreen();
+    };
+
+    const check = document.createElement('div');
+    check.className = 'check';
+    check.textContent = state.selectedSeries.has(series.uid) ? '✓' : '';
+
+    const thumbDiv = document.createElement('div'); thumbDiv.className = 'series-thumb';
+    const canvas = document.createElement('canvas'); thumbDiv.appendChild(canvas);
+    const midIdx = Math.floor(series.images.length / 2);
+    renderDicomToCanvas(series.images[midIdx], canvas, 0, 0, false, 0);
+
+    const info = document.createElement('div'); info.className = 'series-info';
+    const desc = document.createElement('div'); desc.className = 'series-desc'; desc.textContent = series.description; desc.title = series.description;
+    const meta = document.createElement('div'); meta.className = 'series-meta';
+    const mod = document.createElement('span'); mod.className = 'mod'; mod.textContent = series.modality;
+    const imgs = document.createElement('span'); imgs.textContent = `${series.images.length} objs`;
+    const frs = document.createElement('span'); frs.textContent = `${series.frames} fr`;
+    const sn = document.createElement('span'); sn.textContent = `S${series.number}`;
+    meta.append(mod, imgs, frs, sn); info.append(desc, meta);
+    card.append(check, thumbDiv, info); grid.appendChild(card);
+  });
+  document.getElementById('btnConfigure').disabled = state.selectedSeries.size === 0;
+}
+function selectAllSeries(){ state.series.forEach(s=>state.selectedSeries.add(s.uid)); renderSeriesScreen(); }
+function deselectAllSeries(){ state.selectedSeries.clear(); renderSeriesScreen(); }
+
+function expandSeriesFrames(series) {
+  const frames = [];
+  for (const dcm of series.images) {
+    const n = Math.max(1, parseInt(dcm.NumberOfFrames) || 1);
+    for (let f = 0; f < n; f++) frames.push({ dcm, frameIndex:f, instanceNumber: parseInt(dcm.InstanceNumber) || 0, frameNumber: f + 1 });
+  }
+  return frames;
+}
+
+function defaultConfigForSeries(series) {
+  const first = series.images[0];
+  const ww = parseFloat(parseMaybeMulti(first.WindowWidth,'number')) || 400;
+  const wl = parseFloat(parseMaybeMulti(first.WindowCenter,'number'));
+  return { layout:6, start:1, end:series.frames, skip:1, ww, wl:isFinite(wl)?wl:40, filmSize:3, wlPreset:-1, fitMode:0, gutter:2, invert:false, excludedPages: new Set(), orientation: 'portrait', paperColor: 'black' };
+}
+
+function goToConfigure() {
+  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+  selectedList.forEach(s => { if (!state.configs[s.uid]) state.configs[s.uid] = defaultConfigForSeries(s); });
+  state.activeSeriesIdx = 0;
+  goToScreen(2);
+  renderConfigScreen();
+}
+
+function getActiveSeriesAndConfig(){ const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid)); const series = selectedList[state.activeSeriesIdx]; return series ? { series, cfg: state.configs[series.uid] } : null; }
+
+function getDisplayName(){ return state.anonymize ? 'ANONIMIZADO' : (state.study.patientName || ''); }
+function getDisplayID(){ return state.anonymize ? '***' : (state.study.patientID || ''); }
+function getDisplayInstitution(){ return state.anonymize ? '' : (document.getElementById('clinicName').value || state.study.institution || ''); }
+function getDisplaySeriesDescription(series){ return state.anonymize ? `${series.modality} SERIES` : series.description; }
+
+function renderConfigScreen() {
+  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+  if (!selectedList.length) return;
+  const tabs = document.getElementById('seriesTabs'); tabs.innerHTML = '';
+  selectedList.forEach((s, idx) => {
+    const tab = document.createElement('div');
+    tab.className = 'series-tab' + (idx === state.activeSeriesIdx ? ' active' : '');
+    tab.textContent = `${s.modality}: ${s.description}`;
+    tab.onclick = () => { state.activeSeriesIdx = idx; renderConfigScreen(); };
+    tabs.appendChild(tab);
+  });
+
+  const { series, cfg } = getActiveSeriesAndConfig();
+  const frames = expandSeriesFrames(series);
+
+  const layoutOptions = document.getElementById('layoutOptions'); layoutOptions.innerHTML = '';
+  LAYOUTS.forEach((lay, idx) => {
+    const opt = document.createElement('div'); opt.className = 'layout-opt' + (cfg.layout===idx ? ' selected' : ''); opt.onclick = () => { cfg.layout = idx; renderConfigScreen(); };
+    const gp = document.createElement('div'); gp.className = 'grid-preview'; gp.style.gridTemplateColumns = `repeat(${lay.c},1fr)`; gp.style.gridTemplateRows = `repeat(${lay.r},1fr)`;
+    for(let i=0;i<lay.c*lay.r;i++){ const c = document.createElement('div'); c.className = 'cell'; gp.appendChild(c); }
+    const lb = document.createElement('div'); lb.className = 'grid-label'; lb.textContent = lay.l; opt.append(gp, lb); layoutOptions.appendChild(opt);
+  });
+  
+  const applyAllLayoutBtn = document.createElement('button');
+  applyAllLayoutBtn.className = 'btn'; applyAllLayoutBtn.style.gridColumn = '1 / -1'; applyAllLayoutBtn.style.marginTop = '4px'; applyAllLayoutBtn.style.padding = '4px'; applyAllLayoutBtn.style.fontSize = '10px';
+  applyAllLayoutBtn.textContent = 'Aplicar este layout a todas as séries';
+  applyAllLayoutBtn.onclick = () => {
+    state.series.filter(s=>state.selectedSeries.has(s.uid)).forEach(s => state.configs[s.uid].layout = cfg.layout);
+    renderConfigScreen();
+  };
+  layoutOptions.appendChild(applyAllLayoutBtn);
+
+  document.getElementById('imgStart').max = frames.length; document.getElementById('imgStart').value = cfg.start;
+  document.getElementById('imgEnd').max = frames.length; document.getElementById('imgEnd').value = cfg.end;
+  document.getElementById('imgSkip').value = cfg.skip;
+  document.getElementById('wlWindow').value = Math.round(cfg.ww || 400);
+  document.getElementById('wlLevel').value = Math.round(cfg.wl || 40);
+  document.getElementById('gutterPx').value = cfg.gutter;
+  document.getElementById('invertToggle').className = 'toggle' + (cfg.invert ? ' on' : '');
+  document.getElementById('annotToggle').className = 'toggle' + (state.showAnnotations ? ' on' : '');
+  document.getElementById('anonToggle').className = 'toggle' + (state.anonymize ? ' on' : '');
+
+  const presets = [...(WL_PRESETS[series.modality] || []), ...WL_PRESETS.DEFAULT];
+  const wlContainer = document.getElementById('wlPresets'); wlContainer.innerHTML = '';
+  presets.forEach((p, idx) => {
+    const btn = document.createElement('div'); btn.className = 'wl-preset' + (cfg.wlPreset===idx ? ' selected' : ''); btn.textContent = p.l;
+    btn.onclick = () => {
+      cfg.wlPreset = idx;
+      if (p.ww === 0) {
+        const firstFrame = frames[0];
+        const auto = computeAutoWindow(firstFrame.dcm, firstFrame.frameIndex);
+        cfg.ww = auto.ww; cfg.wl = auto.wl;
+      } else { cfg.ww = p.ww; cfg.wl = p.wl; }
+      renderConfigScreen();
+    };
+    wlContainer.appendChild(btn);
+  });
+  
+  const applyAllWlBtn = document.createElement('button');
+  applyAllWlBtn.className = 'btn'; applyAllWlBtn.style.marginTop = '4px'; applyAllWlBtn.style.width = '100%'; applyAllWlBtn.style.padding = '4px'; applyAllWlBtn.style.fontSize = '10px';
+  applyAllWlBtn.textContent = 'Aplicar W/L a todas as séries';
+  applyAllWlBtn.onclick = () => {
+    state.series.filter(s=>state.selectedSeries.has(s.uid)).forEach(s => { state.configs[s.uid].ww = cfg.ww; state.configs[s.uid].wl = cfg.wl; state.configs[s.uid].wlPreset = cfg.wlPreset; });
+    renderConfigScreen();
+  };
+  wlContainer.appendChild(applyAllWlBtn);
+
+  const fitModes = document.getElementById('fitModeOpts'); fitModes.innerHTML = '';
+  FIT_MODES.forEach((m, idx) => { const chip = document.createElement('div'); chip.className='chip'+(cfg.fitMode===idx?' selected':''); chip.textContent = m; chip.onclick=()=>{ cfg.fitMode=idx; renderConfigScreen(); }; fitModes.appendChild(chip); });
+  const sizes = document.getElementById('filmSizeOpts'); sizes.innerHTML = '';
+  FILM_SIZES.forEach((fs, idx) => { const chip = document.createElement('div'); chip.className='chip'+(cfg.filmSize===idx?' selected':''); chip.textContent=fs.label; chip.onclick=()=>{ Object.values(state.configs).forEach(c=>c.filmSize=idx); renderConfigScreen(); }; sizes.appendChild(chip); });
+
+  const orientOpts = document.getElementById('orientOpts'); orientOpts.innerHTML = '';
+  ['Retrato', 'Paisagem'].forEach((label, idx) => {
+    const val = idx === 0 ? 'portrait' : 'landscape';
+    const opt = document.createElement('div');
+    opt.className = 'chip' + (cfg.orientation === val ? ' selected' : ''); opt.textContent = label;
+    opt.onclick = () => { Object.values(state.configs).forEach(c=>c.orientation=val); renderConfigScreen(); };
+    orientOpts.appendChild(opt);
+  });
+
+  const paperColorOpts = document.getElementById('paperColorOpts'); paperColorOpts.innerHTML = '';
+  ['Preto (Filme)', 'Branco (A4)'].forEach((label, idx) => {
+    const val = idx === 0 ? 'black' : 'white';
+    const opt = document.createElement('div');
+    opt.className = 'chip' + (cfg.paperColor === val ? ' selected' : ''); opt.textContent = label;
+    opt.onclick = () => { Object.values(state.configs).forEach(c=>c.paperColor=val); renderConfigScreen(); };
+    paperColorOpts.appendChild(opt);
+  });
+
+  updateRangeDisplay(series, cfg);
+  renderFilmPreview();
+}
+
+function getSelectedFrames(series, cfg) {
+  const frames = expandSeriesFrames(series);
+  const out = [];
+  const start = Math.max(1, Math.min(cfg.start, frames.length));
+  const end = Math.max(start, Math.min(cfg.end, frames.length));
+  const skip = Math.max(1, cfg.skip);
+  for (let i = start - 1; i < end && i < frames.length; i += skip) out.push(frames[i]);
+  return out;
+}
+function updateRangeDisplay(series, cfg){ const n=getSelectedFrames(series,cfg).length; const lay=LAYOUTS[cfg.layout]; const per=lay.c*lay.r; const sheets=Math.ceil(Math.max(1,n)/per); setText(document.getElementById('imgCountBadge'), `${n} imagens → ${sheets} filme${sheets!==1?'s':''}`); }
+function updateRange(){ const active=getActiveSeriesAndConfig(); if(!active) return; const {series,cfg}=active; cfg.start=Math.max(1, parseInt(document.getElementById('imgStart').value)||1); cfg.end=Math.max(cfg.start, parseInt(document.getElementById('imgEnd').value)||series.frames); cfg.skip=Math.max(1, parseInt(document.getElementById('imgSkip').value)||1); updateRangeDisplay(series,cfg); renderFilmPreview(); }
+function updateWL(){ const active=getActiveSeriesAndConfig(); if(!active) return; active.cfg.ww=Math.max(1, parseInt(document.getElementById('wlWindow').value)||400); active.cfg.wl=parseInt(document.getElementById('wlLevel').value)||40; active.cfg.wlPreset=-1; renderFilmPreview(); }
+function updateGutter(){ const active=getActiveSeriesAndConfig(); if(!active) return; active.cfg.gutter=Math.max(0,Math.min(12,parseInt(document.getElementById('gutterPx').value)||0)); renderFilmPreview(); }
+function toggleInvert(){ const active=getActiveSeriesAndConfig(); if(!active) return; active.cfg.invert=!active.cfg.invert; renderConfigScreen(); }
+function toggleAnnotations(){ state.showAnnotations=!state.showAnnotations; renderConfigScreen(); }
+function toggleAnon(){ state.anonymize=!state.anonymize; renderConfigScreen(); }
+
+function applyCanvasFit(canvas, mode) {
+  if (mode === 'contain') { canvas.style.maxWidth = '100%'; canvas.style.maxHeight = '100%'; canvas.style.objectFit = 'contain'; canvas.style.width=''; canvas.style.height=''; }
+  else if (mode === 'cover') { canvas.style.width='100%'; canvas.style.height='100%'; canvas.style.objectFit='cover'; }
+  else { canvas.style.width='100%'; canvas.style.height='100%'; canvas.style.objectFit='fill'; }
+}
+
+function renderFilmPreview() {
+  const area = document.getElementById('previewArea');
+  area.innerHTML = '';
+  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+  if (!selectedList.length) { area.innerHTML = '<div class="no-preview">Nenhuma série selecionada</div>'; return; }
+
+  selectedList.forEach((series, seriesIdx) => {
+    const cfg = state.configs[series.uid];
+    const layout = LAYOUTS[cfg.layout];
+    const perSheet = layout.c * layout.r;
+    const frames = getSelectedFrames(series, cfg);
+    const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
+    const filmSize = FILM_SIZES[cfg.filmSize];
+    const fitMode = FIT_MODES[cfg.fitMode];
+    const isWhite = cfg.paperColor === 'white';
+
+    const label = document.createElement('div'); label.className = 'film-page-label'; label.textContent = `── ${series.modality}: ${getDisplaySeriesDescription(series)} ──`; if(seriesIdx>0) label.style.marginTop='20px'; area.appendChild(label);
+
+    for (let page = 0; page < totalSheets; page++) {
+      const pageFrames = frames.slice(page * perSheet, (page + 1) * perSheet);
+      const film = document.createElement('div'); film.className = 'film-sheet';
+      
+      let fsW = filmSize.w, fsH = filmSize.h;
+      if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+      const scale = Math.min(700 / Math.max(fsW, fsH), 900 / Math.min(fsW, fsH));
+      film.style.width = Math.round(fsW * scale) + 'px'; film.style.height = Math.round(fsH * scale) + 'px';
+      if (isWhite) { film.style.background = '#fff'; film.style.border = '1px solid #ccc'; }
+
+      if (state.showAnnotations) {
+        const header = document.createElement('div'); header.className='film-header-bar';
+        if (isWhite) { header.style.color = '#000'; header.style.background = 'linear-gradient(to bottom,rgba(255,255,255,.8),transparent)'; }
+        
+        const left = document.createElement('span'); 
+        left.style.display = 'flex'; left.style.alignItems = 'center'; left.style.gap = '6px';
+        
+        if (clinicLogoDataUrl) {
+          const img = document.createElement('img');
+          img.src = clinicLogoDataUrl;
+          img.style.maxHeight = '24px';
+          left.appendChild(img);
+        }
+        
+        const instText = document.createElement('span');
+        instText.textContent = getDisplayInstitution();
+        left.appendChild(instText);
+        
+        const right = document.createElement('span'); right.textContent = `${getDisplayName()} | ${getDisplayID()}`;
+        header.append(left,right); film.appendChild(header);
+
+        const footer = document.createElement('div'); footer.className='film-footer-bar';
+        if (isWhite) { footer.style.color = '#000'; footer.style.background = 'linear-gradient(to top,rgba(255,255,255,.8),transparent)'; }
+        const fl = document.createElement('span'); fl.textContent = `${series.modality}: ${getDisplaySeriesDescription(series)} | ${state.anonymize ? '' : state.study.studyDate}`;
+        const fr = document.createElement('span'); fr.textContent = `W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | Pg ${page+1}/${totalSheets}`;
+        footer.append(fl,fr); film.appendChild(footer);
+      }
+
+      const grid = document.createElement('div'); grid.className='film-grid'; grid.style.gridTemplateColumns=`repeat(${layout.c},1fr)`; grid.style.gridTemplateRows=`repeat(${layout.r},1fr)`; grid.style.gap = cfg.gutter + 'px'; grid.style.padding = `${state.showAnnotations ? 36 : 4}px ${cfg.gutter}px ${state.showAnnotations ? 20 : 4}px`;
+      for (let i = 0; i < perSheet; i++) {
+        const cell = document.createElement('div'); cell.className='film-cell';
+        if (isWhite) cell.style.background = '#eee';
+        if (i < pageFrames.length && !cfg.excludedPages.has(page)) {
+          const ref = pageFrames[i];
+          const canvas = document.createElement('canvas');
+          renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex);
+          const img = document.createElement('img');
+          img.src = canvas.toDataURL('image/jpeg', 0.95);
+          applyCanvasFit(img, cfg.fitMode);
+          cell.appendChild(img);
+          const tag = document.createElement('div'); tag.className='film-cell-label'; tag.textContent = `#${ref.instanceNumber}${ref.dcm.NumberOfFrames ? '.'+ref.frameNumber : ''}`; if(isWhite) tag.style.color = '#000'; cell.appendChild(tag);
+        }
+        grid.appendChild(cell);
+      }
+      film.appendChild(grid);
+      
+      const pageControls = document.createElement('div');
+      pageControls.className = 'page-controls';
+      pageControls.style.display = 'flex'; pageControls.style.flexDirection = 'column'; pageControls.style.alignItems = 'center'; pageControls.style.gap = '6px';
+      
+      const pageLabel = document.createElement('div'); pageLabel.className='film-page-label'; pageLabel.style.margin = '0'; pageLabel.textContent=`Filme ${page+1} de ${totalSheets}`;
+      
+      const excludeBtn = document.createElement('button');
+      excludeBtn.className = 'btn'; excludeBtn.style.padding = '4px 10px'; excludeBtn.style.fontSize = '10px';
+      
+      if (cfg.excludedPages.has(page)) {
+        excludeBtn.textContent = 'Restaurar Página';
+        excludeBtn.className = 'btn btn-primary';
+        film.classList.add('excluded-sheet');
+        film.style.opacity = '0.2';
+      } else {
+        excludeBtn.textContent = 'Excluir Sobra (Não Imprimir)';
+        film.classList.remove('excluded-sheet');
+        film.style.opacity = '1';
+      }
+      
+      excludeBtn.onclick = () => {
+        if (cfg.excludedPages.has(page)) cfg.excludedPages.delete(page);
+        else cfg.excludedPages.add(page);
+        renderFilmPreview();
+      };
+      
+      pageControls.appendChild(film);
+      pageControls.appendChild(pageLabel);
+      pageControls.appendChild(excludeBtn);
+      
+      area.appendChild(pageControls);
+    }
+  });
+}
+
+function printFilms(){
+  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+  if (!selectedList.length) return;
+
+  // Collect all visible pages (same logic as exportPDF)
+  const pages = [];
+  selectedList.forEach(series => {
+    const cfg = state.configs[series.uid];
+    const layout = LAYOUTS[cfg.layout];
+    const perSheet = layout.c * layout.r;
+    const frames = getSelectedFrames(series, cfg);
+    const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
+    const filmSize = FILM_SIZES[cfg.filmSize];
+    for (let page = 0; page < totalSheets; page++) {
+      if (!cfg.excludedPages.has(page)) {
+        pages.push({ series, cfg, layout, filmSize, page, totalSheets, frames: frames.slice(page * perSheet, (page + 1) * perSheet) });
+      }
+    }
+  });
+  if (!pages.length) { alert('Nenhuma página para imprimir.'); return; }
+
+  // Determine orientation from first config
+  const firstCfg = pages[0].cfg;
+  const isLandscape = firstCfg.orientation === 'landscape';
+
+  // Build clean HTML for print window
+  let sheetsHtml = '';
+  for (let p = 0; p < pages.length; p++) {
+    const pg = pages[p];
+    const { series, cfg, layout, filmSize, frames, page, totalSheets } = pg;
+    let fsW = filmSize.w, fsH = filmSize.h;
+    if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+    const isWhite = cfg.paperColor === 'white';
+    const bg = isWhite ? '#fff' : '#000';
+    const fg = isWhite ? '#000' : 'rgba(255,255,255,0.8)';
+    const cellBg = isWhite ? '#eee' : '#000';
+    const aspect = fsW / fsH;
+    const isLast = p === pages.length - 1;
+
+    let headerHtml = '';
+    let footerHtml = '';
+    if (state.showAnnotations) {
+      let logoHtml = '';
+      if (clinicLogoDataUrl) {
+        logoHtml = `<img src="${clinicLogoDataUrl}" style="max-height:18px;margin-right:4px;vertical-align:middle;">`;
+      }
+      headerHtml = `<div style="position:absolute;top:0;left:0;right:0;padding:4px 6px;font-size:7px;color:${fg};display:flex;justify-content:space-between;z-index:2;">
+        <span>${logoHtml}${getDisplayInstitution()}</span>
+        <span>${getDisplayName()} | ${getDisplayID()}</span>
+      </div>`;
+      footerHtml = `<div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;font-size:7px;color:${fg};display:flex;justify-content:space-between;z-index:2;">
+        <span>${series.modality}: ${getDisplaySeriesDescription(series)} ${state.anonymize ? '' : '| ' + state.study.studyDate}</span>
+        <span>W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | ${page+1}/${totalSheets}</span>
+      </div>`;
+    }
+
+    // Render DICOM frames to data URLs
+    let cellsHtml = '';
+    for (let i = 0; i < layout.c * layout.r; i++) {
+      let imgHtml = '';
+      if (i < frames.length) {
+        const ref = frames[i];
+        const canvas = document.createElement('canvas');
+        if (renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex)) {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          imgHtml = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:${FIT_MODES[cfg.fitMode]};display:block;">`;
+        }
+      }
+      cellsHtml += `<div style="background:${cellBg};overflow:hidden;position:relative;">${imgHtml}</div>`;
+    }
+
+    const gutterPx = cfg.gutter;
+    const padTop = state.showAnnotations ? 28 : 4;
+    const padBot = state.showAnnotations ? 18 : 4;
+
+    sheetsHtml += `<div class="sheet" style="background:${bg};position:relative;aspect-ratio:${aspect};width:100%;max-height:100vh;box-sizing:border-box;${isLast ? '' : 'page-break-after:always;break-after:page;'}">
+      ${headerHtml}
+      <div style="display:grid;grid-template-columns:repeat(${layout.c},1fr);grid-template-rows:repeat(${layout.r},1fr);gap:${gutterPx}px;width:100%;height:100%;padding:${padTop}px ${gutterPx}px ${padBot}px;box-sizing:border-box;">
+        ${cellsHtml}
+      </div>
+      ${footerHtml}
+    </div>`;
+  }
+
+  const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Imprimir Filmes</title>
+<style>
+  @page { size: ${isLandscape ? 'landscape' : 'portrait'}; margin: 5mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:auto; }
+  body { font-family: 'Courier New', monospace; }
+  .sheet { overflow:hidden; }
+</style></head><body>${sheetsHtml}
+<script>window.onload=function(){window.print();window.close();}<\/script>
+</body></html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) { alert('Popup bloqueado! Permita popups para este site.'); return; }
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+}
+
+function calcContain(cellW, cellH, imgW, imgH){ const imgAR = imgW / imgH; const cellAR = cellW / cellH; if (imgAR > cellAR) { const w = cellW; const h = cellW / imgAR; return { x:0, y:(cellH-h)/2, w, h }; } const h = cellH; const w = cellH * imgAR; return { x:(cellW-w)/2, y:0, w, h }; }
+function calcCover(cellW, cellH, imgW, imgH){ const imgAR = imgW / imgH; const cellAR = cellW / cellH; if (imgAR > cellAR) { const h = cellH; const w = cellH * imgAR; return { x:(cellW-w)/2, y:0, w, h }; } const w = cellW; const h = cellW / imgAR; return { x:0, y:(cellH-h)/2, w, h }; }
+
+async function exportPDF() {
+  const overlay = document.getElementById('exportOverlay');
+  const msg = document.getElementById('exportMsg');
+  overlay.classList.add('active');
+  msg.textContent = 'Preparando filmes...';
+  await new Promise(r=>setTimeout(r,50));
+
+  let logoW = 0, logoH = 10;
+  let logoData = null, logoFormat = 'JPEG';
+  if (clinicLogoDataUrl) {
+    const img = new Image();
+    img.src = clinicLogoDataUrl;
+    await new Promise(r => { img.onload=r; img.onerror=r; });
+    if (img.width && img.height) {
+      logoW = (img.width / img.height) * logoH;
+      logoData = clinicLogoDataUrl;
+      logoFormat = clinicLogoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    }
+  }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+    const pages = [];
+    selectedList.forEach(series => {
+      const cfg = state.configs[series.uid];
+      const layout = LAYOUTS[cfg.layout];
+      const perSheet = layout.c * layout.r;
+      const frames = getSelectedFrames(series, cfg);
+      const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
+      const filmSize = FILM_SIZES[cfg.filmSize];
+      for (let page = 0; page < totalSheets; page++) {
+        if (!cfg.excludedPages.has(page)) {
+          pages.push({ series, cfg, layout, filmSize, page, totalSheets, frames: frames.slice(page * perSheet, (page + 1) * perSheet) });
+        }
+      }
+    });
+    if (!pages.length) {
+      alert('Nenhuma página para exportar (todas excluídas ou vazias).');
+      msg.textContent = 'Exportação cancelada';
+      setTimeout(()=>overlay.classList.remove('active'), 1000);
+      return;
+    }
+
+    let pdf = null;
+    for (let p = 0; p < pages.length; p++) {
+      const pg = pages[p];
+      const { series, cfg, layout, filmSize, frames, page, totalSheets } = pg;
+      msg.textContent = `Renderizando filme ${p+1}/${pages.length}...`;
+      await new Promise(r=>setTimeout(r,20));
+
+      let fsW = filmSize.w, fsH = filmSize.h;
+      if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+
+      if (!pdf) pdf = new jsPDF({ orientation: fsW > fsH ? 'landscape' : 'portrait', unit:'mm', format:[fsW, fsH] });
+      else pdf.addPage([fsW, fsH], fsW > fsH ? 'landscape' : 'portrait');
+
+      const isWhite = cfg.paperColor === 'white';
+      if (!isWhite) {
+        pdf.setFillColor(0,0,0); pdf.rect(0,0,fsW,fsH,'F');
+      }
+
+      if (state.showAnnotations) {
+        pdf.setFont('courier','normal'); pdf.setFontSize(6); 
+        pdf.setTextColor(isWhite ? 0 : 200);
+        let leftX = 4;
+        if (logoData) {
+          pdf.addImage(logoData, logoFormat, leftX, 1.5, logoW, logoH);
+          leftX += logoW + 2;
+        }
+        pdf.text(getDisplayInstitution(), leftX, 5);
+        pdf.text(`${getDisplayName()} | ${getDisplayID()}`, fsW - 4, 5, { align:'right' });
+        pdf.text(`${series.modality}: ${getDisplaySeriesDescription(series)} ${state.anonymize ? '' : '| ' + state.study.studyDate}`, 4, fsH - 3);
+        pdf.text(`W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | ${page+1}/${totalSheets}`, fsW - 4, fsH - 3, { align:'right' });
+      }
+
+      const gutterMm = cfg.gutter * 0.264583;
+      const margin = state.showAnnotations ? 14 : 3;
+      const gridW = fsW - margin * 2;
+      const gridH = fsH - margin * 2;
+      const cellW = (gridW - gutterMm * (layout.c - 1)) / layout.c;
+      const cellH = (gridH - gutterMm * (layout.r - 1)) / layout.r;
+      const fitMode = FIT_MODES[cfg.fitMode];
+
+      for (let i = 0; i < frames.length; i++) {
+        const col = i % layout.c;
+        const row = Math.floor(i / layout.c);
+        const cellX = margin + col * (cellW + gutterMm);
+        const cellY = margin + row * (cellH + gutterMm);
+        const ref = frames[i];
+        const canvas = document.createElement('canvas');
+        if (!renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex)) continue;
+        let rect;
+        if (fitMode === 'contain') rect = calcContain(cellW, cellH, canvas.width, canvas.height);
+        else if (fitMode === 'cover') rect = calcCover(cellW, cellH, canvas.width, canvas.height);
+        else rect = { x:0, y:0, w:cellW, h:cellH };
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        pdf.addImage(dataUrl, 'JPEG', cellX + rect.x, cellY + rect.y, rect.w, rect.h);
+      }
+    }
+
+    msg.textContent = 'Finalizando PDF...';
+    await new Promise(r=>setTimeout(r,50));
+    const name = sanitizeFilename(state.anonymize ? 'ANON' : state.study.patientName || 'DICOM');
+    const fileName = `FilmComposer_${name}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const pdfWin = window.open(url, '_blank');
+    if (pdfWin) {
+      pdfWin.document.title = fileName;
+    } else {
+      // Fallback: try direct download via link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao gerar PDF: ' + err.message);
+  } finally {
+    overlay.classList.remove('active');
+  }
+}
+</script>
+</body>
+</html>
