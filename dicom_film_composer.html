@@ -1,3 +1,24 @@
+<!--
+  LOGOS DICOMFilm v4.0.0
+  Compositor de Filmes DICOM para Impressão Clínica
+
+  Copyright 2024-2026 Diêgo Azevedo
+  Licensed under the Apache License, Version 2.0
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Arquivo único (single-file) contendo HTML + CSS + JavaScript.
+  Dependências externas carregadas via CDN: JSZip, jsPDF, IBM Plex Fonts.
+
+  Estrutura do código:
+    1. CSS: Design system (variáveis, componentes, layout, impressão)
+    2. HTML: Três telas (upload, seleção de séries, configuração/preview)
+    3. JavaScript:
+       a. Constantes DICOM (tags, VRs, transfer syntaxes)
+       b. Parser DICOM (parseDicom, parseValue, readString)
+       c. Renderização (renderDicomToCanvas, computeAutoWindow)
+       d. Estado e UI (state, renderConfigScreen, renderFilmPreview)
+       e. Exportação (printFilms, exportPDF)
+-->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -209,10 +230,19 @@ input[type="number"],select{font-family:var(--font-mono);font-size:12px;backgrou
 </div>
 
 <script>
+/* ==========================================================================
+   SEÇÃO 1: CONSTANTES DICOM
+   Definições de tags, VRs e sintaxes de transferência suportadas.
+   ========================================================================== */
+/**
+ * TransferSupport — Define quais Transfer Syntaxes são renderizáveis.
+ * SUPPORTED: Implicit VR LE e Explicit VR LE (sem compressão).
+ * UNSUPPORTED_*: Detectadas e reportadas, mas não renderizadas.
+ */
 const TransferSupport = {
   SUPPORTED: new Set([
-    '1.2.840.10008.1.2',
-    '1.2.840.10008.1.2.1',
+    '1.2.840.10008.1.2',     // Implicit VR Little Endian
+    '1.2.840.10008.1.2.1',   // Explicit VR Little Endian
   ]),
   UNSUPPORTED_UNCOMPRESSED: {
     '1.2.840.10008.1.2.2': 'Explicit VR Big Endian',
@@ -234,13 +264,19 @@ const TransferSupport = {
   },
 };
 
+/** Mapa de tags DICOM relevantes — [grupo, elemento] para cada campo necessário */
 const TAGS = {
   MetaGroupLength:[0x0002,0x0000], TransferSyntaxUID:[0x0002,0x0010], Modality:[0x0008,0x0060], StudyDate:[0x0008,0x0020], StudyDescription:[0x0008,0x1030], SeriesDescription:[0x0008,0x103E], InstitutionName:[0x0008,0x0080], PatientName:[0x0010,0x0010], PatientID:[0x0010,0x0020], PatientBirthDate:[0x0010,0x0030], StudyInstanceUID:[0x0020,0x000D], SeriesInstanceUID:[0x0020,0x000E], InstanceNumber:[0x0020,0x0013], SeriesNumber:[0x0020,0x0011], Rows:[0x0028,0x0010], Columns:[0x0028,0x0011], BitsAllocated:[0x0028,0x0100], BitsStored:[0x0028,0x0101], HighBit:[0x0028,0x0102], PixelRepresentation:[0x0028,0x0103], SamplesPerPixel:[0x0028,0x0002], PhotometricInterp:[0x0028,0x0004], PlanarConfiguration:[0x0028,0x0006], WindowCenter:[0x0028,0x1050], WindowWidth:[0x0028,0x1051], RescaleIntercept:[0x0028,0x1052], RescaleSlope:[0x0028,0x1053], NumberOfFrames:[0x0028,0x0008], PixelData:[0x7FE0,0x0010],
 };
+/** VRs que usam campo de 4 bytes para comprimento (em vez de 2) */
 const EXPLICIT_VR_LONG = new Set(['OB','OD','OF','OL','OW','SQ','UC','UN','UR','UT']);
+/** Mapa VR → tipo de dado JS para conversão de valores */
 const VALUE_VR_MAP = { UI:'string', PN:'string', LO:'string', SH:'string', CS:'string', DA:'string', TM:'string', IS:'string', DS:'string', LT:'string', ST:'string', AE:'string', AS:'string', DT:'string', UC:'string', UR:'string', UT:'string', US:'us', SS:'ss', UL:'ul', SL:'sl' };
+/** Hints de VR para tags conhecidas quando a Transfer Syntax é Implicit VR */
 const IMPLICIT_VR_HINTS = new Map();
+/** tk() — Combina grupo+elemento em uma chave numérica única de 32 bits */
 function tk(g,e){ return (g<<16)|e; }
+// Popula IMPLICIT_VR_HINTS com os VRs conhecidos para cada tag
 for (const [k,[g,e]] of Object.entries(TAGS)) {
   if (['Rows','Columns','BitsAllocated','BitsStored','HighBit','PixelRepresentation','SamplesPerPixel','PlanarConfiguration'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'US');
   if (['InstanceNumber','SeriesNumber'].includes(k)) IMPLICIT_VR_HINTS.set(tk(g,e),'IS');
@@ -249,16 +285,31 @@ for (const [k,[g,e]] of Object.entries(TAGS)) {
 }
 const TAG_MAP = {}; for (const [name,[g,e]] of Object.entries(TAGS)) TAG_MAP[tk(g,e)] = name;
 
+
+/* ==========================================================================
+   SEÇÃO 2: CONFIGURAÇÕES DE LAYOUT E PRESETS CLÍNICOS
+   ========================================================================== */
+
+/** Layouts disponíveis: c=colunas, r=linhas, l=label para UI */
 const LAYOUTS = [{c:1,r:1,l:'1×1'},{c:2,r:1,l:'2×1'},{c:1,r:2,l:'1×2'},{c:2,r:2,l:'2×2'},{c:2,r:3,l:'2×3'},{c:3,r:2,l:'3×2'},{c:3,r:3,l:'3×3'},{c:3,r:4,l:'3×4'},{c:4,r:3,l:'4×3'},{c:4,r:4,l:'4×4'},{c:4,r:5,l:'4×5'},{c:5,r:4,l:'5×4'},{c:5,r:5,l:'5×5'},{c:5,r:6,l:'5×6'},{c:6,r:5,l:'6×5'},{c:6,r:6,l:'6×6'}];
+/** Tamanhos de filme clínico em mm (w=largura, h=altura) */
 const FILM_SIZES = [{label:'8×10"',w:203,h:254},{label:'10×12"',w:254,h:305},{label:'11×14"',w:279,h:356},{label:'14×14"',w:356,h:356},{label:'14×17"',w:356,h:432},{label:'A4',w:210,h:297},{label:'A3',w:297,h:420}];
+/** Presets de Window/Level por modalidade — valores clínicos padrão */
 const WL_PRESETS = {
   CT:[{l:'Abdome',ww:400,wl:40},{l:'Pulmão',ww:1500,wl:-600},{l:'Osso',ww:2000,wl:400},{l:'Cérebro',ww:80,wl:40},{l:'Mediastino',ww:350,wl:50},{l:'Fígado',ww:150,wl:70},{l:'Coluna',ww:300,wl:40}],
   MR:[{l:'T1 Brain',ww:600,wl:300},{l:'T2 Brain',ww:800,wl:400},{l:'FLAIR',ww:1000,wl:500},{l:'Spine',ww:700,wl:350},{l:'Joint',ww:500,wl:250}],
   DEFAULT:[{l:'Auto',ww:0,wl:0},{l:'Full Range',ww:4096,wl:2048}],
 };
+/** Modos de ajuste de imagem na célula: contain, cover, stretch */
 const FIT_MODES = ['contain', 'cover', 'stretch'];
+/** Data URL do logo da clínica (null se não carregado) */
 let clinicLogoDataUrl = null;
 
+/* ==========================================================================
+   SEÇÃO 3: FUNÇÕES UTILITÁRIAS E GESTÃO DE LOGO
+   ========================================================================== */
+
+/** handleLogoUpload() — Lê arquivo de imagem e armazena como Data URL */
 function handleLogoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -271,6 +322,7 @@ function handleLogoUpload(e) {
   reader.readAsDataURL(file);
 }
 
+/** removeLogo() — Remove o logo carregado e atualiza o preview */
 function removeLogo() {
   clinicLogoDataUrl = null;
   document.getElementById('logoUpload').value = '';
@@ -278,12 +330,23 @@ function removeLogo() {
   renderFilmPreview();
 }
 
+/** setSteps() — Atualiza indicador visual de progresso (dots no header) */
 function setSteps(idx){ document.querySelectorAll('.step-dot').forEach((d,i)=>d.className='step-dot'+(i<idx?' done':'')+(i===idx?' active':'')); }
+/** setText() — Define textContent de um elemento com proteção contra null */
 function setText(el, value){ el.textContent = value == null ? '' : String(value); }
+/** formatDate() — Converte data DICOM 'YYYYMMDD' para 'DD/MM/YYYY' */
 function formatDate(ds){ if(!ds || String(ds).length<8) return ds||''; ds=String(ds); return `${ds.slice(6,8)}/${ds.slice(4,6)}/${ds.slice(0,4)}`; }
+/** sanitizeFilename() — Remove caracteres inválidos de nomes de arquivo */
 function sanitizeFilename(s){ return String(s||'DICOM').replace(/[^a-zA-Z0-9._-]/g,'_'); }
 
+/** parsePersonName() — Converte nome DICOM (separado por ^) em texto legível */
 function parsePersonName(v){ return String(v||'').replace(/\^/g,' ').trim(); }
+/**
+ * parseMaybeMulti() — Extrai primeiro valor de campos DICOM multi-valued
+ * @param {string} v - Valor bruto do campo (pode conter '\\' como separador)
+ * @param {string} cast - 'string' ou 'number'
+ * @returns {string|number|null}
+ */
 function parseMaybeMulti(v, cast='string') {
   if (v == null) return null;
   const parts = String(v).split('\\').map(x=>x.trim()).filter(Boolean);
@@ -301,8 +364,20 @@ function detectTransferSyntax(ts) {
   return { status:'unsupported_unknown', label:value };
 }
 
+
+/* ==========================================================================
+   SEÇÃO 4: PARSER DICOM
+   Lê arquivos DICOM binários, extrai tags e localiza pixel data.
+   Suporta Implicit VR LE e Explicit VR LE.
+   ========================================================================== */
+
+/** readString() — Lê uma string ASCII de um DataView em posição/tamanho específicos */
 function readString(dv, offset, length){ let s=''; for(let i=0;i<length;i++) s += String.fromCharCode(dv.getUint8(offset+i)); return s.replace(/\0/g,'').trim(); }
 
+/**
+ * parseValue() — Converte bytes brutos de uma tag DICOM para valor JS.
+ * Usa o VR para decidir entre inteiro (US/SS/UL/SL) ou string.
+ */
 function parseValue(dv, offset, length, vr, le) {
   if (length <= 0) return null;
   const kind = VALUE_VR_MAP[vr] || 'string';
@@ -313,6 +388,13 @@ function parseValue(dv, offset, length, vr, le) {
   return readString(dv, offset, length);
 }
 
+/**
+ * parseDicom() — Parser principal de arquivos DICOM.
+ * Lê o buffer binário, detecta preâmbulo 'DICM', determina a Transfer Syntax,
+ * itera sobre as tags extraindo campos relevantes, e localiza o offset dos pixel data.
+ * @param {ArrayBuffer} buffer - Conteúdo binário do arquivo DICOM
+ * @returns {Object} Objeto com campos DICOM + metadados internos (_pixelDataOffset, etc.)
+ */
 function parseDicom(buffer) {
   const len = buffer.byteLength;
   if (len < 8) return { error:'too_small' };
@@ -463,18 +545,27 @@ function parseDicom(buffer) {
   return result;
 }
 
+
+/* ==========================================================================
+   SEÇÃO 5: RENDERIZAÇÃO DE PIXEL DATA DICOM
+   Converte dados brutos de pixels em imagens Canvas.
+   ========================================================================== */
+
+/** signExtend() — Extensão de sinal para pixels com representação signed */
 function signExtend(value, bitsStored) {
   const sign = 1 << (bitsStored - 1);
   const full = 1 << bitsStored;
   return (value & sign) ? value - full : value;
 }
 
+/** readRawSample() — Lê um pixel bruto (8 ou 16 bits) do DataView */
 function readRawSample(dv, baseOffset, bitsAllocated, littleEndian) {
   if (bitsAllocated === 8) return dv.getUint8(baseOffset);
   if (bitsAllocated === 16) return dv.getUint16(baseOffset, littleEndian);
   return null;
 }
 
+/** extractSample() — Aplica máscara de bits, shift e sign extend ao pixel bruto */
 function extractSample(raw, bitsStored, highBit, signed) {
   if (raw == null) return null;
   const shift = Math.max(0, highBit - bitsStored + 1);
@@ -485,6 +576,7 @@ function extractSample(raw, bitsStored, highBit, signed) {
   return value;
 }
 
+/** Cache de renderização — evita re-renderizar frames já processados (LRU com max 220) */
 const renderCache = new Map();
 function cacheSet(key, value) {
   if (renderCache.size > 220) {
@@ -493,6 +585,11 @@ function cacheSet(key, value) {
   }
   renderCache.set(key, value);
 }
+
+/**
+ * computeAutoWindow() — Calcula Window/Level automático.
+ * Amostra ~2048 pixels distribuídos pelo frame para determinar min/max.
+ */
 
 function computeAutoWindow(dcm, frameIndex=0) {
   const rows = dcm.Rows, cols = dcm.Columns;
@@ -521,6 +618,19 @@ function computeAutoWindow(dcm, frameIndex=0) {
   return { ww: Math.max(1, max - min), wl: (max + min) / 2 };
 }
 
+/**
+ * renderDicomToCanvas() — Função principal de renderização.
+ * Aplica Window/Level, RescaleSlope/Intercept, inversão MONOCHROME1/2,
+ * e suporta imagens monocromáticas (1 sample) e RGB (3 samples).
+ * Usa cache LRU para evitar re-processamento.
+ * @param {Object} dcm - Objeto DICOM parseado
+ * @param {HTMLCanvasElement} canvas - Canvas destino
+ * @param {number} ww - Window Width
+ * @param {number} wl - Window Level (Center)
+ * @param {boolean} invert - Inverter escala de cinza
+ * @param {number} frameIndex - Índice do frame (para multi-frame)
+ * @returns {boolean} true se renderizou com sucesso
+ */
 function renderDicomToCanvas(dcm, canvas, ww, wl, invert=false, frameIndex=0) {
   if (!dcm || !dcm._pixelDataOffset || dcm._unsupportedTS) return false;
   const rows = dcm.Rows, cols = dcm.Columns;
@@ -607,6 +717,17 @@ function renderDicomToCanvas(dcm, canvas, ww, wl, invert=false, frameIndex=0) {
   return true;
 }
 
+
+/* ==========================================================================
+   SEÇÃO 6: ESTADO DA APLICAÇÃO E NAVEGAÇÃO
+   Gerencia o estado global e transições entre telas.
+   ========================================================================== */
+
+/**
+ * state — Estado central da aplicação.
+ * Contém o estudo carregado, séries, configurações por série,
+ * e preferências de visualização (anotações, anonimização).
+ */
 let state = {
   screen:0,
   study:null,
@@ -627,7 +748,9 @@ const progressText = document.getElementById('progressText');
 const parseStatsEl = document.getElementById('parseStats');
 const screens = ['screen-upload','screen-series','screen-config'];
 
+/** goToScreen() — Navega entre as 3 telas (upload, séries, config) */
 function goToScreen(idx){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(screens[idx]).classList.add('active'); state.screen = idx; setSteps(idx); if(idx===0) setText(document.getElementById('headerInfo'),'Film Composer'); }
+/** resetApp() — Reseta todo o estado, libera memória dos buffers, e volta à tela inicial */
 function resetApp(){ state.series.forEach(s=>s.images.forEach(i=>{ delete i._buffer; })); renderCache.clear(); state={screen:0,study:null,series:[],selectedSeries:new Set(),activeSeriesIdx:0,configs:{},showAnnotations:true,anonymize:false,parseStats:{ valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} }}; uploadZone.style.display=''; progressContainer.style.display='none'; parseStatsEl.innerHTML=''; fileInput.value=''; goToScreen(0); }
 
 uploadZone.addEventListener('click',()=>fileInput.click());
@@ -636,6 +759,14 @@ uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragove
 uploadZone.addEventListener('drop',e=>{ e.preventDefault(); uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length) processZip(e.dataTransfer.files[0]); });
 fileInput.addEventListener('change',()=>{ if(fileInput.files.length) processZip(fileInput.files[0]); });
 
+/**
+ * processZip() — Pipeline principal de carregamento:
+ * 1. Lê o arquivo ZIP com JSZip
+ * 2. Filtra entradas válidas (exclui __MACOSX, DICOMDIR, arquivos não-DICOM)
+ * 3. Faz parse de cada arquivo DICOM
+ * 4. Classifica: válido, inválido, compressão não suportada
+ * 5. Organiza em estudo/séries e navega para tela de seleção
+ */
 async function processZip(file) {
   if (!file.name.toLowerCase().endsWith('.zip')) { alert('Selecione um arquivo .zip'); return; }
   uploadZone.style.display = 'none';
@@ -731,6 +862,10 @@ function renderParseStats(stats) {
   }
 }
 
+/**
+ * organizeStudy() — Agrupa arquivos DICOM parseados em séries.
+ * Extrai dados do paciente do primeiro arquivo e ordena por SeriesNumber/InstanceNumber.
+ */
 function organizeStudy(dcmFiles) {
   const first = dcmFiles[0];
   state.study = {
@@ -769,6 +904,7 @@ function organizeStudy(dcmFiles) {
   state.configs = {};
 }
 
+/** renderSeriesScreen() — Popula a tela 2 com cards de séries e banner do paciente */
 function renderSeriesScreen() {
   const banner = document.getElementById('patientBanner');
   banner.innerHTML = '';
@@ -848,6 +984,13 @@ function getDisplayID(){ return state.anonymize ? '***' : (state.study.patientID
 function getDisplayInstitution(){ return state.anonymize ? '' : (document.getElementById('clinicName').value || state.study.institution || ''); }
 function getDisplaySeriesDescription(series){ return state.anonymize ? `${series.modality} SERIES` : series.description; }
 
+
+/* ==========================================================================
+   SEÇÃO 7: TELA DE CONFIGURAÇÃO
+   Controles de layout, W/L, orientação, e preferências por série.
+   ========================================================================== */
+
+/** renderConfigScreen() — Renderiza todos os controles da tela de configuração */
 function renderConfigScreen() {
   const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
   if (!selectedList.length) return;
@@ -942,6 +1085,7 @@ function renderConfigScreen() {
   renderFilmPreview();
 }
 
+/** getSelectedFrames() — Retorna os frames selecionados conforme intervalo (start/end/skip) */
 function getSelectedFrames(series, cfg) {
   const frames = expandSeriesFrames(series);
   const out = [];
@@ -965,6 +1109,17 @@ function applyCanvasFit(canvas, mode) {
   else { canvas.style.width='100%'; canvas.style.height='100%'; canvas.style.objectFit='fill'; }
 }
 
+
+/* ==========================================================================
+   SEÇÃO 8: PREVIEW DOS FILMES
+   Renderiza as folhas de filme na área de preview com todas as opções.
+   ========================================================================== */
+
+/**
+ * renderFilmPreview() — Gera o preview visual de todas as folhas de filme.
+ * Cria elementos DOM para cada folha com grid, anotações, e botões de exclusão.
+ * Cada frame DICOM é renderizado via Canvas e convertido em <img> para performance.
+ */
 function renderFilmPreview() {
   const area = document.getElementById('previewArea');
   area.innerHTML = '';
@@ -1074,6 +1229,18 @@ function renderFilmPreview() {
   });
 }
 
+
+/* ==========================================================================
+   SEÇÃO 9: IMPRESSÃO NATIVA
+   Gera uma janela popup limpa com HTML auto-contido para impressão.
+   ========================================================================== */
+
+/**
+ * printFilms() — Abre popup com documento HTML limpo contendo apenas as folhas de filme.
+ * Cada frame é convertido em Data URL (JPEG) e inserido como <img>.
+ * O popup executa window.print() automaticamente e fecha após o diálogo.
+ * Exclui páginas marcadas como "excluídas" e respeita orientação/tamanho.
+ */
 function printFilms(){
   const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
   if (!selectedList.length) return;
@@ -1175,9 +1342,23 @@ function printFilms(){
   printWindow.document.close();
 }
 
+/** calcContain() — Calcula posição/tamanho de imagem para caber na célula sem corte */
 function calcContain(cellW, cellH, imgW, imgH){ const imgAR = imgW / imgH; const cellAR = cellW / cellH; if (imgAR > cellAR) { const w = cellW; const h = cellW / imgAR; return { x:0, y:(cellH-h)/2, w, h }; } const h = cellH; const w = cellH * imgAR; return { x:(cellW-w)/2, y:0, w, h }; }
+/** calcCover() — Calcula posição/tamanho de imagem para preencher a célula (pode cortar) */
 function calcCover(cellW, cellH, imgW, imgH){ const imgAR = imgW / imgH; const cellAR = cellW / cellH; if (imgAR > cellAR) { const h = cellH; const w = cellH * imgAR; return { x:(cellW-w)/2, y:0, w, h }; } const w = cellW; const h = cellW / imgAR; return { x:0, y:(cellH-h)/2, w, h }; }
 
+
+/* ==========================================================================
+   SEÇÃO 10: EXPORTAÇÃO DE PDF
+   Gera documento PDF via jsPDF com layout fiel ao preview.
+   ========================================================================== */
+
+/**
+ * exportPDF() — Gera PDF com jsPDF e abre no visualizador do navegador.
+ * Para cada página não-excluída: renderiza frames em Canvas, posiciona via
+ * calcContain/calcCover, e adiciona ao documento PDF com anotações.
+ * Usa URL.createObjectURL() para contornar restrições do Chrome em file://.
+ */
 async function exportPDF() {
   const overlay = document.getElementById('exportOverlay');
   const msg = document.getElementById('exportMsg');
