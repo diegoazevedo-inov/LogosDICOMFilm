@@ -5,8 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [4.0.0] - 2026-03-31
+## [Unreleased]
 
+### Adicionado
+- Documentação de planejamento para funcionalidade de compartilhamento de PDF via Web Share API (`docs/PLAN_SHARE_PDF.md`)
+
+### Modificado
+- Reformulação da interface (`dicom_film_composer.html`) para total suporte e responsividade em dispositivos móveis. Foram adicionados breakpoints para ajustar a barra lateral de configuração, permitindo melhor interação e visibilidade do preview em telas menores.
+
+## [4.0.0] - 2026-03-31
 ### Adicionado
 - Parser DICOM nativo com suporte a Implicit VR LE e Explicit VR LE
 - Composição multi-série com configurações independentes por série
