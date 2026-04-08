@@ -5,13 +5,21 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Unreleased]
+## [5.0.0] - 2026-04-08
 
 ### Adicionado
-- Documentação de planejamento para funcionalidade de compartilhamento de PDF via Web Share API (`docs/PLAN_SHARE_PDF.md`)
+- **Draft de Impressão Unificado**: Nova arquitetura que agrupa todas as séries selecionadas em um fluxo contínuo, preenchendo espaços vazios entre folhas automaticamente.
+- **Interatividade Total (Preview)**: Implementação de Drag & Drop para reordenação manual de imagens e botão de exclusão individual (`✕`) em cada thumbnail.
+- **Exclusão de Folha**: Botão de exclusão em lote para remover rapidamente todas as imagens de uma página específica do draft.
+- **Parser de Metadados Inteligente**: Extração de CPF/ID com máscara dinâmica, data de nascimento formatada e cálculo preciso de idade (anos e meses) baseado na data do estudo.
+- **Identificação Visual**: Suporte a upload de imagem de rodapé personalizada com ajuste automático de largura.
+- **Configuração Global**: Centralização de layout, enquadramento e orientação para todo o documento, garantindo consistência visual.
 
 ### Modificado
 - Reformulação da interface (`dicom_film_composer.html`) para total suporte e responsividade em dispositivos móveis. Foram adicionados breakpoints para ajustar a barra lateral de configuração, permitindo melhor interação e visibilidade do preview em telas menores.
+- Sincronização dos motores de exportação (`jsPDF` e `printFilms`) para consumir o array de draft manipulado pelo usuário.
+- Rodapé dinâmico que identifica a "Série Dominante" em composições híbridas.
+- Borda superior em azul escuro (#003366) para alinhamento com a identidade visual clínica.
 
 ## [4.0.0] - 2026-03-31
 ### Adicionado
@@ -51,5 +59,6 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+[5.0.0]: https://github.com/diegoazevedo-inov/LogosDICOMFilm/releases/tag/v5.0.0
 [4.0.0]: https://github.com/diegoazevedo-inov/LogosDICOMFilm/releases/tag/v4.0.0
 [3.0.0]: https://github.com/diegoazevedo-inov/LogosDICOMFilm/releases/tag/v3.0.0

@@ -1,5 +1,5 @@
 <!--
-  LOGOS DICOMFilm v4.0.0
+  LOGOS DICOMFilm v5.0.0
   Compositor de Filmes DICOM para Impressão Clínica
 
   Copyright 2024-2026 Diêgo Azevedo
@@ -215,9 +215,14 @@ input[type="number"],select{font-family:var(--font-mono);font-size:12px;backgrou
       </div>
       <div style="margin-top:8px">
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
-          <label for="logoUpload" class="btn" style="padding: 4px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;">Upload Logo (JPG/PNG)</label>
+          <label for="logoUpload" class="btn" style="padding: 4px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;">Upload Logo (Cabeçalho)</label>
           <input type="file" id="logoUpload" accept="image/png, image/jpeg" style="display:none" onchange="handleLogoUpload(event)" />
           <button class="btn" id="removeLogoBtn" style="display:none; padding: 4px 8px; font-size: 11px; width: 100%;" onclick="removeLogo()">Remover Logo</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <label for="footerUpload" class="btn" style="padding: 4px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;">Upload Imagem (Rodapé)</label>
+          <input type="file" id="footerUpload" accept="image/png, image/jpeg" style="display:none" onchange="handleFooterUpload(event)" />
+          <button class="btn" id="removeFooterBtn" style="display:none; padding: 4px 8px; font-size: 11px; width: 100%;" onclick="removeFooter()">Remover Rodapé</button>
         </div>
         <input class="clinic-input" id="clinicName" placeholder="Nome da clínica / hospital" oninput="renderFilmPreview()" style="width: 100%; box-sizing: border-box; text-align: center;" />
       </div>
@@ -314,8 +319,9 @@ const WL_PRESETS = {
 };
 /** Modos de ajuste de imagem na célula: contain, cover, stretch */
 const FIT_MODES = ['contain', 'cover', 'stretch'];
-/** Data URL do logo da clínica (null se não carregado) */
+/** Data URL do logo da clínica e do rodapé fixo */
 let clinicLogoDataUrl = null;
+let clinicFooterDataUrl = null;
 
 /* ==========================================================================
    SEÇÃO 3: FUNÇÕES UTILITÁRIAS E GESTÃO DE LOGO
@@ -339,6 +345,27 @@ function removeLogo() {
   clinicLogoDataUrl = null;
   document.getElementById('logoUpload').value = '';
   document.getElementById('removeLogoBtn').style.display = 'none';
+  renderFilmPreview();
+}
+
+/** handleFooterUpload() — Lê arquivo de imagem do rodapé */
+function handleFooterUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    clinicFooterDataUrl = ev.target.result;
+    document.getElementById('removeFooterBtn').style.display = 'block';
+    renderFilmPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+/** removeFooter() — Remove o rodapé carregado */
+function removeFooter() {
+  clinicFooterDataUrl = null;
+  document.getElementById('footerUpload').value = '';
+  document.getElementById('removeFooterBtn').style.display = 'none';
   renderFilmPreview();
 }
 
@@ -741,6 +768,8 @@ function renderDicomToCanvas(dcm, canvas, ww, wl, invert=false, frameIndex=0) {
  * e preferências de visualização (anotações, anonimização).
  */
 let state = {
+  globalConfig: { layout: 6, filmSize: 3, fitMode: 0, orientation: 'portrait', paperColor: 'black', gutter: 2 },
+  printDraft: [],
   screen:0,
   study:null,
   series:[],
@@ -763,7 +792,7 @@ const screens = ['screen-upload','screen-series','screen-config'];
 /** goToScreen() — Navega entre as 3 telas (upload, séries, config) */
 function goToScreen(idx){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(screens[idx]).classList.add('active'); state.screen = idx; setSteps(idx); if(idx===0) setText(document.getElementById('headerInfo'),'Film Composer'); }
 /** resetApp() — Reseta todo o estado, libera memória dos buffers, e volta à tela inicial */
-function resetApp(){ state.series.forEach(s=>s.images.forEach(i=>{ delete i._buffer; })); renderCache.clear(); state={screen:0,study:null,series:[],selectedSeries:new Set(),activeSeriesIdx:0,configs:{},showAnnotations:true,anonymize:false,parseStats:{ valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} }}; uploadZone.style.display=''; progressContainer.style.display='none'; parseStatsEl.innerHTML=''; fileInput.value=''; goToScreen(0); }
+function resetApp(){ state.series.forEach(s=>s.images.forEach(i=>{ delete i._buffer; })); renderCache.clear(); state={globalConfig: { layout: 6, filmSize: 3, fitMode: 0, orientation: 'portrait', paperColor: 'black', gutter: 2 }, printDraft: [], screen:0,study:null,series:[],selectedSeries:new Set(),activeSeriesIdx:0,configs:{},showAnnotations:true,anonymize:false,parseStats:{ valid:0, invalid:0, ignored:0, unsupportedCompressed:0, unsupportedUncompressed:0, byReason:{} }}; uploadZone.style.display=''; progressContainer.style.display='none'; parseStatsEl.innerHTML=''; fileInput.value=''; goToScreen(0); }
 
 uploadZone.addEventListener('click',()=>fileInput.click());
 uploadZone.addEventListener('dragover',e=>{ e.preventDefault(); uploadZone.classList.add('dragover'); });
@@ -887,6 +916,8 @@ function organizeStudy(dcmFiles) {
     studyDescription: first.StudyDescription || '',
     institution: first.InstitutionName || '',
     birthDate: formatDate(first.PatientBirthDate),
+    rawBirthDate: first.PatientBirthDate,
+    rawStudyDate: first.StudyDate
   };
 
   const seriesMap = new Map();
@@ -981,9 +1012,33 @@ function defaultConfigForSeries(series) {
   return { layout:6, start:1, end:series.frames, skip:1, ww, wl:isFinite(wl)?wl:40, filmSize:3, wlPreset:-1, fitMode:0, gutter:2, invert:false, excludedPages: new Set(), orientation: 'portrait', paperColor: 'black' };
 }
 
+function buildPrintDraft() {
+  state.printDraft = [];
+  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+  selectedList.forEach(series => {
+    const cfg = state.configs[series.uid];
+    const frames = expandSeriesFrames(series);
+    const start = Math.max(1, cfg.start) - 1;
+    const end = Math.min(frames.length, cfg.end);
+    for (let i = start; i < end; i += cfg.skip) {
+      const fr = frames[i];
+      state.printDraft.push({
+        id: fr.dcm.SeriesInstanceUID + '_' + fr.instanceNumber + '_' + fr.frameNumber + '_' + i,
+        series, cfg, dcm: fr.dcm, frameIndex: fr.frameIndex, instanceNumber: fr.instanceNumber, frameNumber: fr.frameNumber
+      });
+    }
+  });
+}
+
+function reapplyFiltersAndBuild() {
+  buildPrintDraft();
+  renderFilmPreview();
+}
+
 function goToConfigure() {
   const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
   selectedList.forEach(s => { if (!state.configs[s.uid]) state.configs[s.uid] = defaultConfigForSeries(s); });
+  buildPrintDraft();
   state.activeSeriesIdx = 0;
   goToScreen(2);
   renderConfigScreen();
@@ -992,9 +1047,36 @@ function goToConfigure() {
 function getActiveSeriesAndConfig(){ const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid)); const series = selectedList[state.activeSeriesIdx]; return series ? { series, cfg: state.configs[series.uid] } : null; }
 
 function getDisplayName(){ return state.anonymize ? 'ANONIMIZADO' : (state.study.patientName || ''); }
-function getDisplayID(){ return state.anonymize ? '***' : (state.study.patientID || ''); }
+function getDisplayID(){ return state.anonymize ? '***' : formatCPF(state.study.patientID || ''); }
 function getDisplayInstitution(){ return state.anonymize ? '' : (document.getElementById('clinicName').value || state.study.institution || ''); }
 function getDisplaySeriesDescription(series){ return state.anonymize ? `${series.modality} SERIES` : series.description; }
+
+function formatCPF(cpf) {
+  const str = String(cpf || '').replace(/\\D/g, '');
+  if (str.length === 11) return str.replace(/(\\d{3})(\\d{3})(\\d{3})(\\d{2})/, "$1.$2.$3-$4");
+  return String(cpf || '');
+}
+
+function getPatientAge() {
+  if (state.anonymize) return '***';
+  const bdStr = String(state.study.rawBirthDate || '');
+  const sdStr = String(state.study.rawStudyDate || '');
+  if (bdStr.length < 8) return '';
+  let by = parseInt(bdStr.substring(0,4)), bm = parseInt(bdStr.substring(4,6)), bd = parseInt(bdStr.substring(6,8));
+  let sy, sm, sd;
+  if (sdStr.length >= 8) { sy = parseInt(sdStr.substring(0,4)); sm = parseInt(sdStr.substring(4,6)); sd = parseInt(sdStr.substring(6,8)); }
+  else { const date = new Date(); sy = date.getFullYear(); sm = date.getMonth()+1; sd = date.getDate(); }
+  if (isNaN(by) || isNaN(sy)) return '';
+  let years = sy - by, months = sm - bm;
+  if (sd < bd) months--;
+  if (months < 0) { years--; months += 12; }
+  let txt = [];
+  if (years > 0) txt.push(`${years} ${years===1?'ano':'anos'}`);
+  if (months > 0 || txt.length === 0) txt.push(`${months} ${months===1?'mês':'meses'}`);
+  return txt.join(' e ');
+}
+
+function getDisplayBirth() { return state.anonymize ? '***' : (state.study.birthDate || ''); }
 
 
 /* ==========================================================================
@@ -1020,27 +1102,23 @@ function renderConfigScreen() {
 
   const layoutOptions = document.getElementById('layoutOptions'); layoutOptions.innerHTML = '';
   LAYOUTS.forEach((lay, idx) => {
-    const opt = document.createElement('div'); opt.className = 'layout-opt' + (cfg.layout===idx ? ' selected' : ''); opt.onclick = () => { cfg.layout = idx; renderConfigScreen(); };
+    const opt = document.createElement('div'); opt.className = 'layout-opt' + (state.globalConfig.layout===idx ? ' selected' : ''); opt.onclick = () => { state.globalConfig.layout = idx; renderConfigScreen(); };
     const gp = document.createElement('div'); gp.className = 'grid-preview'; gp.style.gridTemplateColumns = `repeat(${lay.c},1fr)`; gp.style.gridTemplateRows = `repeat(${lay.r},1fr)`;
     for(let i=0;i<lay.c*lay.r;i++){ const c = document.createElement('div'); c.className = 'cell'; gp.appendChild(c); }
     const lb = document.createElement('div'); lb.className = 'grid-label'; lb.textContent = lay.l; opt.append(gp, lb); layoutOptions.appendChild(opt);
   });
   
-  const applyAllLayoutBtn = document.createElement('button');
-  applyAllLayoutBtn.className = 'btn'; applyAllLayoutBtn.style.gridColumn = '1 / -1'; applyAllLayoutBtn.style.marginTop = '4px'; applyAllLayoutBtn.style.padding = '4px'; applyAllLayoutBtn.style.fontSize = '10px';
-  applyAllLayoutBtn.textContent = 'Aplicar este layout a todas as séries';
-  applyAllLayoutBtn.onclick = () => {
-    state.series.filter(s=>state.selectedSeries.has(s.uid)).forEach(s => state.configs[s.uid].layout = cfg.layout);
-    renderConfigScreen();
-  };
-  layoutOptions.appendChild(applyAllLayoutBtn);
-
   document.getElementById('imgStart').max = frames.length; document.getElementById('imgStart').value = cfg.start;
+  document.getElementById('imgStart').onchange = (e) => { cfg.start = parseInt(e.target.value); reapplyFiltersAndBuild(); };
   document.getElementById('imgEnd').max = frames.length; document.getElementById('imgEnd').value = cfg.end;
+  document.getElementById('imgEnd').onchange = (e) => { cfg.end = parseInt(e.target.value); reapplyFiltersAndBuild(); };
   document.getElementById('imgSkip').value = cfg.skip;
+  document.getElementById('imgSkip').onchange = (e) => { cfg.skip = parseInt(e.target.value); reapplyFiltersAndBuild(); };
+
   document.getElementById('wlWindow').value = Math.round(cfg.ww || 400);
   document.getElementById('wlLevel').value = Math.round(cfg.wl || 40);
-  document.getElementById('gutterPx').value = cfg.gutter;
+  document.getElementById('gutterPx').value = state.globalConfig.gutter;
+  document.getElementById('gutterPx').onchange = (e) => { state.globalConfig.gutter = parseInt(e.target.value); renderConfigScreen(); };
   document.getElementById('invertToggle').className = 'toggle' + (cfg.invert ? ' on' : '');
   document.getElementById('annotToggle').className = 'toggle' + (state.showAnnotations ? ' on' : '');
   document.getElementById('anonToggle').className = 'toggle' + (state.anonymize ? ' on' : '');
@@ -1071,16 +1149,16 @@ function renderConfigScreen() {
   wlContainer.appendChild(applyAllWlBtn);
 
   const fitModes = document.getElementById('fitModeOpts'); fitModes.innerHTML = '';
-  FIT_MODES.forEach((m, idx) => { const chip = document.createElement('div'); chip.className='chip'+(cfg.fitMode===idx?' selected':''); chip.textContent = m; chip.onclick=()=>{ cfg.fitMode=idx; renderConfigScreen(); }; fitModes.appendChild(chip); });
+  FIT_MODES.forEach((m, idx) => { const chip = document.createElement('div'); chip.className='chip'+(state.globalConfig.fitMode===idx?' selected':''); chip.textContent = m; chip.onclick=()=>{ state.globalConfig.fitMode=idx; renderConfigScreen(); }; fitModes.appendChild(chip); });
   const sizes = document.getElementById('filmSizeOpts'); sizes.innerHTML = '';
-  FILM_SIZES.forEach((fs, idx) => { const chip = document.createElement('div'); chip.className='chip'+(cfg.filmSize===idx?' selected':''); chip.textContent=fs.label; chip.onclick=()=>{ Object.values(state.configs).forEach(c=>c.filmSize=idx); renderConfigScreen(); }; sizes.appendChild(chip); });
+  FILM_SIZES.forEach((fs, idx) => { const chip = document.createElement('div'); chip.className='chip'+(state.globalConfig.filmSize===idx?' selected':''); chip.textContent=fs.label; chip.onclick=()=>{ state.globalConfig.filmSize=idx; renderConfigScreen(); }; sizes.appendChild(chip); });
 
   const orientOpts = document.getElementById('orientOpts'); orientOpts.innerHTML = '';
   ['Retrato', 'Paisagem'].forEach((label, idx) => {
     const val = idx === 0 ? 'portrait' : 'landscape';
     const opt = document.createElement('div');
-    opt.className = 'chip' + (cfg.orientation === val ? ' selected' : ''); opt.textContent = label;
-    opt.onclick = () => { Object.values(state.configs).forEach(c=>c.orientation=val); renderConfigScreen(); };
+    opt.className = 'chip' + (state.globalConfig.orientation === val ? ' selected' : ''); opt.textContent = label;
+    opt.onclick = () => { state.globalConfig.orientation=val; renderConfigScreen(); };
     orientOpts.appendChild(opt);
   });
 
@@ -1088,8 +1166,8 @@ function renderConfigScreen() {
   ['Preto (Filme)', 'Branco (A4)'].forEach((label, idx) => {
     const val = idx === 0 ? 'black' : 'white';
     const opt = document.createElement('div');
-    opt.className = 'chip' + (cfg.paperColor === val ? ' selected' : ''); opt.textContent = label;
-    opt.onclick = () => { Object.values(state.configs).forEach(c=>c.paperColor=val); renderConfigScreen(); };
+    opt.className = 'chip' + (state.globalConfig.paperColor === val ? ' selected' : ''); opt.textContent = label;
+    opt.onclick = () => { state.globalConfig.paperColor=val; renderConfigScreen(); };
     paperColorOpts.appendChild(opt);
   });
 
@@ -1129,116 +1207,169 @@ function applyCanvasFit(canvas, mode) {
 
 /**
  * renderFilmPreview() — Gera o preview visual de todas as folhas de filme.
- * Cria elementos DOM para cada folha com grid, anotações, e botões de exclusão.
- * Cada frame DICOM é renderizado via Canvas e convertido em <img> para performance.
+ * Renderiza baseado no state.printDraft de forma contínua em vez de separar por séries.
+ * Permite Drag & Drop em cada célula para reordenação local e exclusão individual cruzada.
  */
+let draggedItemIndex = null;
+
 function renderFilmPreview() {
   const area = document.getElementById('previewArea');
   area.innerHTML = '';
-  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
-  if (!selectedList.length) { area.innerHTML = '<div class="no-preview">Nenhuma série selecionada</div>'; return; }
+  if (state.printDraft.length === 0) { area.innerHTML = '<div class="no-preview">Nenhuma série selecionada ou imagens na fila</div>'; return; }
 
-  selectedList.forEach((series, seriesIdx) => {
-    const cfg = state.configs[series.uid];
-    const layout = LAYOUTS[cfg.layout];
-    const perSheet = layout.c * layout.r;
-    const frames = getSelectedFrames(series, cfg);
-    const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
-    const filmSize = FILM_SIZES[cfg.filmSize];
-    const fitMode = FIT_MODES[cfg.fitMode];
-    const isWhite = cfg.paperColor === 'white';
+  const glb = state.globalConfig;
+  const layout = LAYOUTS[glb.layout];
+  const perSheet = layout.c * layout.r;
+  const totalSheets = Math.max(1, Math.ceil(state.printDraft.length / perSheet));
+  const filmSize = FILM_SIZES[glb.filmSize];
+  const fitMode = FIT_MODES[glb.fitMode];
+  const isWhite = glb.paperColor === 'white';
 
-    const label = document.createElement('div'); label.className = 'film-page-label'; label.textContent = `── ${series.modality}: ${getDisplaySeriesDescription(series)} ──`; if(seriesIdx>0) label.style.marginTop='20px'; area.appendChild(label);
+  for (let page = 0; page < totalSheets; page++) {
+    const pageFrames = state.printDraft.slice(page * perSheet, (page + 1) * perSheet);
+    
+    // Determine the dominant series for the footer text on this page
+    const seriesCounts = {};
+    let dominantSeries = pageFrames[0] ? pageFrames[0].series : null;
+    let maxC = 0;
+    pageFrames.forEach(f => {
+       seriesCounts[f.series.uid] = (seriesCounts[f.series.uid] || 0) + 1;
+       if (seriesCounts[f.series.uid] > maxC) { maxC = seriesCounts[f.series.uid]; dominantSeries = f.series; }
+    });
 
-    for (let page = 0; page < totalSheets; page++) {
-      const pageFrames = frames.slice(page * perSheet, (page + 1) * perSheet);
-      const film = document.createElement('div'); film.className = 'film-sheet';
-      
-      let fsW = filmSize.w, fsH = filmSize.h;
-      if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
-      const scale = Math.min(700 / Math.max(fsW, fsH), 900 / Math.min(fsW, fsH));
-      film.style.width = Math.round(fsW * scale) + 'px'; film.style.height = Math.round(fsH * scale) + 'px';
-      if (isWhite) { film.style.background = '#fff'; film.style.border = '1px solid #ccc'; }
+    const film = document.createElement('div'); film.className = 'film-sheet';
+    
+    let fsW = filmSize.w, fsH = filmSize.h;
+    if (glb.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+    const scale = Math.min(700 / Math.max(fsW, fsH), 900 / Math.min(fsW, fsH));
+    film.style.width = Math.round(fsW * scale) + 'px'; film.style.height = Math.round(fsH * scale) + 'px';
+    if (isWhite) { film.style.background = '#fff'; film.style.border = '1px solid #ccc'; }
 
-      if (state.showAnnotations) {
-        const header = document.createElement('div'); header.className='film-header-bar';
-        if (isWhite) { header.style.color = '#000'; header.style.background = 'linear-gradient(to bottom,rgba(255,255,255,.8),transparent)'; }
-        
-        const left = document.createElement('span'); 
-        left.style.display = 'flex'; left.style.alignItems = 'center'; left.style.gap = '6px';
-        
-        if (clinicLogoDataUrl) {
-          const img = document.createElement('img');
-          img.src = clinicLogoDataUrl;
-          img.style.maxHeight = '24px';
-          left.appendChild(img);
-        }
-        
-        const instText = document.createElement('span');
-        instText.textContent = getDisplayInstitution();
-        left.appendChild(instText);
-        
-        const right = document.createElement('span'); right.textContent = `${getDisplayName()} | ${getDisplayID()}`;
-        header.append(left,right); film.appendChild(header);
+    if (state.showAnnotations) {
+      let logoHtml = '';
+      if (clinicLogoDataUrl) logoHtml = `<img src="${clinicLogoDataUrl}" style="max-width:140px; max-height:35px;">`;
+      let footerImgHtml = '';
+      if (clinicFooterDataUrl) footerImgHtml = `<img src="${clinicFooterDataUrl}" style="width:100%;object-fit:contain;display:block;">`;
+      const bg = isWhite ? '#fff' : '#000';
+      const fg = isWhite ? '#000' : 'rgba(255,255,255,0.8)';
 
-        const footer = document.createElement('div'); footer.className='film-footer-bar';
-        if (isWhite) { footer.style.color = '#000'; footer.style.background = 'linear-gradient(to top,rgba(255,255,255,.8),transparent)'; }
-        const fl = document.createElement('span'); fl.textContent = `${series.modality}: ${getDisplaySeriesDescription(series)} | ${state.anonymize ? '' : state.study.studyDate}`;
-        const fr = document.createElement('span'); fr.textContent = `W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | Pg ${page+1}/${totalSheets}`;
-        footer.append(fl,fr); film.appendChild(footer);
-      }
+      const headerHtml = `<div style="position:absolute;top:0;left:0;right:0;border-top:5px solid #003366;border-bottom:1px solid #003366;background:${bg};padding:6px 12px;display:flex;justify-content:space-between;align-items:center;z-index:2;font-family:sans-serif;color:#003366;font-size:10px;">
+        <div style="display:flex;flex-direction:column;line-height:1.4;text-align:left;">
+          <span><strong>Nome:</strong> ${getDisplayName()}</span>
+          <span><strong>CPF:</strong> ${getDisplayID()}</span>
+          <span><strong>Nasc.:</strong> ${getDisplayBirth()}</span>
+          <span><strong>Idade:</strong> ${getPatientAge()}</span>
+        </div>
+        <div style="flex-shrink:0;">${logoHtml}</div>
+      </div>
+      <div style="position:absolute;top:65px;left:0;right:0;padding:6px 12px;font-size:9px;color:${fg};display:flex;justify-content:space-between;z-index:2;font-family:sans-serif;">
+        <span><strong>Procedimento:</strong> ${dominantSeries ? dominantSeries.modality + ' - ' + (Object.keys(seriesCounts).length>1 ? 'Múltiplas Séries / Composição' : getDisplaySeriesDescription(dominantSeries)) : ''}</span>
+        <span><strong>Data do Exame:</strong> ${state.study.studyDate}</span>
+      </div>`;
+      
+      const footerHtml = `<div style="position:absolute;bottom:0;left:0;right:0;z-index:2;font-family:sans-serif;">
+        ${footerImgHtml}
+        <div style="padding:4px 12px;font-size:8px;color:${fg};display:flex;justify-content:space-between;background:${bg};border-top:1px solid #eee;">
+          <span>W/L definido por imagem</span>
+          <span>${page+1}/${totalSheets}</span>
+        </div>
+      </div>`;
 
-      const grid = document.createElement('div'); grid.className='film-grid'; grid.style.gridTemplateColumns=`repeat(${layout.c},1fr)`; grid.style.gridTemplateRows=`repeat(${layout.r},1fr)`; grid.style.gap = cfg.gutter + 'px'; grid.style.padding = `${state.showAnnotations ? 36 : 4}px ${cfg.gutter}px ${state.showAnnotations ? 20 : 4}px`;
-      for (let i = 0; i < perSheet; i++) {
-        const cell = document.createElement('div'); cell.className='film-cell';
-        if (isWhite) cell.style.background = '#eee';
-        if (i < pageFrames.length && !cfg.excludedPages.has(page)) {
-          const ref = pageFrames[i];
-          const canvas = document.createElement('canvas');
-          renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex);
-          const img = document.createElement('img');
-          img.src = canvas.toDataURL('image/jpeg', 0.95);
-          applyCanvasFit(img, cfg.fitMode);
-          cell.appendChild(img);
-          const tag = document.createElement('div'); tag.className='film-cell-label'; tag.textContent = `#${ref.instanceNumber}${ref.dcm.NumberOfFrames ? '.'+ref.frameNumber : ''}`; if(isWhite) tag.style.color = '#000'; cell.appendChild(tag);
-        }
-        grid.appendChild(cell);
-      }
-      film.appendChild(grid);
-      
-      const pageControls = document.createElement('div');
-      pageControls.className = 'page-controls';
-      pageControls.style.display = 'flex'; pageControls.style.flexDirection = 'column'; pageControls.style.alignItems = 'center'; pageControls.style.gap = '6px';
-      
-      const pageLabel = document.createElement('div'); pageLabel.className='film-page-label'; pageLabel.style.margin = '0'; pageLabel.textContent=`Filme ${page+1} de ${totalSheets}`;
-      
-      const excludeBtn = document.createElement('button');
-      excludeBtn.className = 'btn'; excludeBtn.style.padding = '4px 10px'; excludeBtn.style.fontSize = '10px';
-      
-      if (cfg.excludedPages.has(page)) {
-        excludeBtn.textContent = 'Restaurar Página';
-        excludeBtn.className = 'btn btn-primary';
-        film.classList.add('excluded-sheet');
-        film.style.opacity = '0.2';
-      } else {
-        excludeBtn.textContent = 'Excluir Sobra (Não Imprimir)';
-        film.classList.remove('excluded-sheet');
-        film.style.opacity = '1';
-      }
-      
-      excludeBtn.onclick = () => {
-        if (cfg.excludedPages.has(page)) cfg.excludedPages.delete(page);
-        else cfg.excludedPages.add(page);
-        renderFilmPreview();
-      };
-      
-      pageControls.appendChild(film);
-      pageControls.appendChild(pageLabel);
-      pageControls.appendChild(excludeBtn);
-      
-      area.appendChild(pageControls);
+      film.insertAdjacentHTML('beforeend', headerHtml);
+      film.insertAdjacentHTML('beforeend', footerHtml);
     }
-  });
+
+    let padTop = state.showAnnotations ? 90 : 4;
+    let padBot = state.showAnnotations ? (clinicFooterDataUrl ? 60 : 15) : 4;
+
+    const grid = document.createElement('div'); grid.className='film-grid'; grid.style.gridTemplateColumns=`repeat(${layout.c},1fr)`; grid.style.gridTemplateRows=`repeat(${layout.r},1fr)`; grid.style.gap = glb.gutter + 'px'; grid.style.padding = `${padTop}px ${glb.gutter}px ${padBot}px`;
+    for (let i = 0; i < perSheet; i++) {
+      const cell = document.createElement('div'); cell.className='film-cell';
+      if (isWhite) cell.style.background = '#eee';
+      
+      const globalIndex = page * perSheet + i;
+      
+      if (globalIndex < state.printDraft.length) {
+        const ref = state.printDraft[globalIndex];
+        
+        // Drag and Drop
+        cell.draggable = true;
+        cell.ondragstart = (e) => {
+          draggedItemIndex = globalIndex;
+          e.dataTransfer.effectAllowed = 'move';
+          cell.style.opacity = '0.5';
+        };
+        cell.ondragend = () => {
+          cell.style.opacity = '1';
+          draggedItemIndex = null;
+        };
+        cell.ondragover = (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          cell.classList.add('drag-over');
+        };
+        cell.ondragleave = () => {
+          cell.classList.remove('drag-over');
+        };
+        cell.ondrop = (e) => {
+          e.preventDefault();
+          cell.classList.remove('drag-over');
+          if (draggedItemIndex !== null && draggedItemIndex !== globalIndex) {
+            const item = state.printDraft.splice(draggedItemIndex, 1)[0];
+            state.printDraft.splice(globalIndex, 0, item);
+            renderFilmPreview();
+          }
+        };
+
+        const canvas = document.createElement('canvas');
+        renderDicomToCanvas(ref.dcm, canvas, ref.cfg.ww, ref.cfg.wl, ref.cfg.invert, ref.frameIndex);
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL('image/jpeg', 0.95);
+        applyCanvasFit(img, fitMode);
+        cell.appendChild(img);
+        const tag = document.createElement('div'); tag.className='film-cell-label'; tag.textContent = `#${ref.instanceNumber}${ref.dcm.NumberOfFrames ? '.'+ref.frameNumber : ''}`; if(isWhite) tag.style.color = '#000'; cell.appendChild(tag);
+
+        const delBtn = document.createElement('div');
+        delBtn.innerHTML = '✕';
+        delBtn.style.cssText = 'position:absolute;top:4px;right:4px;width:24px;height:24px;background:rgba(255,0,0,0.8);color:white;border-radius:50%;text-align:center;line-height:24px;cursor:pointer;font-family:sans-serif;font-size:14px;font-weight:bold;z-index:10;display:none;';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          state.printDraft.splice(globalIndex, 1);
+          renderFilmPreview();
+        };
+        cell.onmouseenter = () => delBtn.style.display = 'block';
+        cell.onmouseleave = () => delBtn.style.display = 'none';
+        cell.appendChild(delBtn);
+
+      }
+      grid.appendChild(cell);
+    }
+    film.appendChild(grid);
+    
+    const pageControls = document.createElement('div');
+    pageControls.className = 'page-controls';
+    pageControls.style.display = 'flex'; pageControls.style.flexDirection = 'column'; pageControls.style.alignItems = 'center'; pageControls.style.gap = '6px';
+    const pageLabel = document.createElement('div'); pageLabel.className='film-page-label'; pageLabel.style.margin = '0'; pageLabel.textContent=`Filme ${page+1} de ${totalSheets}`;
+    
+    const excludeBtn = document.createElement('button');
+    excludeBtn.className = 'btn'; excludeBtn.style.padding = '4px 10px'; excludeBtn.style.fontSize = '10px';
+    excludeBtn.textContent = 'Excluir Imagens desta Folha';
+    excludeBtn.onclick = () => {
+      // Remove todas as imagens correspondentes a esta página do Draft contínuo.
+      const startIndex = page * perSheet;
+      const countToRemove = Math.min(perSheet, state.printDraft.length - startIndex);
+      if (countToRemove > 0) {
+        state.printDraft.splice(startIndex, countToRemove);
+        renderFilmPreview();
+      }
+    };
+    
+    pageControls.appendChild(film);
+    pageControls.appendChild(pageLabel);
+    pageControls.appendChild(excludeBtn);
+    
+    area.appendChild(pageControls);
+  }
 }
 
 
@@ -1254,58 +1385,81 @@ function renderFilmPreview() {
  * Exclui páginas marcadas como "excluídas" e respeita orientação/tamanho.
  */
 function printFilms(){
-  const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
-  if (!selectedList.length) return;
+  if (!state.printDraft.length) return;
 
-  // Collect all visible pages (same logic as exportPDF)
+  const glb = state.globalConfig;
+  const layout = LAYOUTS[glb.layout];
+  const perSheet = layout.c * layout.r;
+  const totalSheets = Math.ceil(state.printDraft.length / perSheet);
+  const filmSize = FILM_SIZES[glb.filmSize];
+
   const pages = [];
-  selectedList.forEach(series => {
-    const cfg = state.configs[series.uid];
-    const layout = LAYOUTS[cfg.layout];
-    const perSheet = layout.c * layout.r;
-    const frames = getSelectedFrames(series, cfg);
-    const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
-    const filmSize = FILM_SIZES[cfg.filmSize];
-    for (let page = 0; page < totalSheets; page++) {
-      if (!cfg.excludedPages.has(page)) {
-        pages.push({ series, cfg, layout, filmSize, page, totalSheets, frames: frames.slice(page * perSheet, (page + 1) * perSheet) });
-      }
-    }
-  });
+  for (let page = 0; page < totalSheets; page++) {
+    pages.push({ page, totalSheets, frames: state.printDraft.slice(page * perSheet, (page + 1) * perSheet) });
+  }
+
   if (!pages.length) { alert('Nenhuma página para imprimir.'); return; }
 
-  // Determine orientation from first config
-  const firstCfg = pages[0].cfg;
-  const isLandscape = firstCfg.orientation === 'landscape';
+  const isLandscape = glb.orientation === 'landscape';
 
-  // Build clean HTML for print window
   let sheetsHtml = '';
   for (let p = 0; p < pages.length; p++) {
     const pg = pages[p];
-    const { series, cfg, layout, filmSize, frames, page, totalSheets } = pg;
+    const { frames, page, totalSheets } = pg;
     let fsW = filmSize.w, fsH = filmSize.h;
-    if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
-    const isWhite = cfg.paperColor === 'white';
+    if (glb.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+    const isWhite = glb.paperColor === 'white';
     const bg = isWhite ? '#fff' : '#000';
     const fg = isWhite ? '#000' : 'rgba(255,255,255,0.8)';
     const cellBg = isWhite ? '#eee' : '#000';
     const aspect = fsW / fsH;
     const isLast = p === pages.length - 1;
 
+    const seriesCounts = {};
+    let dominantSeries = frames[0] ? frames[0].series : null;
+    let maxC = 0;
+    frames.forEach(f => {
+       seriesCounts[f.series.uid] = (seriesCounts[f.series.uid] || 0) + 1;
+       if (seriesCounts[f.series.uid] > maxC) { maxC = seriesCounts[f.series.uid]; dominantSeries = f.series; }
+    });
+
     let headerHtml = '';
     let footerHtml = '';
+    let padTop = 4;
+    let padBot = 4;
+    
     if (state.showAnnotations) {
       let logoHtml = '';
       if (clinicLogoDataUrl) {
-        logoHtml = `<img src="${clinicLogoDataUrl}" style="max-height:18px;margin-right:4px;vertical-align:middle;">`;
+        logoHtml = `<img src="${clinicLogoDataUrl}" style="max-height:35px; max-width:140px;">`;
       }
-      headerHtml = `<div style="position:absolute;top:0;left:0;right:0;padding:4px 6px;font-size:7px;color:${fg};display:flex;justify-content:space-between;z-index:2;">
-        <span>${logoHtml}${getDisplayInstitution()}</span>
-        <span>${getDisplayName()} | ${getDisplayID()}</span>
+      headerHtml = `<div style="position:absolute;top:0;left:0;right:0;border-top:5px solid #003366;border-bottom:1px solid #003366;background:${bg};padding:6px 12px;display:flex;justify-content:space-between;align-items:center;z-index:2;font-family:sans-serif;color:#003366;font-size:10px;">
+        <div style="display:flex;flex-direction:column;line-height:1.4;">
+          <span><strong>Nome:</strong> ${getDisplayName()}</span>
+          <span><strong>CPF:</strong> ${getDisplayID()}</span>
+          <span><strong>Nasc.:</strong> ${getDisplayBirth()}</span>
+          <span><strong>Idade:</strong> ${getPatientAge()}</span>
+        </div>
+        <div style="flex-shrink:0;">${logoHtml}</div>
+      </div>
+      <div style="position:absolute;top:65px;left:0;right:0;padding:6px 12px;font-size:9px;color:${fg};display:flex;justify-content:space-between;z-index:2;font-family:sans-serif;">
+        <span><strong>Procedimento:</strong> ${dominantSeries ? dominantSeries.modality + ' - ' + (Object.keys(seriesCounts).length > 1 ? 'Múltiplas Séries' : getDisplaySeriesDescription(dominantSeries)) : ''}</span>
+        <span><strong>Data do Exame:</strong> ${state.study.studyDate}</span>
       </div>`;
-      footerHtml = `<div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;font-size:7px;color:${fg};display:flex;justify-content:space-between;z-index:2;">
-        <span>${series.modality}: ${getDisplaySeriesDescription(series)} ${state.anonymize ? '' : '| ' + state.study.studyDate}</span>
-        <span>W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | ${page+1}/${totalSheets}</span>
+      padTop = 90;
+
+      let footerImgHtml = '';
+      padBot = 15;
+      if (clinicFooterDataUrl) {
+        footerImgHtml = `<img src="${clinicFooterDataUrl}" style="width:100%;object-fit:contain;display:block;">`;
+        padBot = Math.min(100, Math.max(60, fsW * 0.15)); // Approximate bottom padding needed
+      }
+      footerHtml = `<div style="position:absolute;bottom:0;left:0;right:0;z-index:2;font-family:sans-serif;">
+        ${footerImgHtml}
+        <div style="padding:4px 12px;font-size:8px;color:${fg};display:flex;justify-content:space-between;background:${bg};border-top:1px solid #eee;">
+          <span>W/L definido por imagem</span>
+          <span>${page+1}/${totalSheets}</span>
+        </div>
       </div>`;
     }
 
@@ -1316,18 +1470,15 @@ function printFilms(){
       if (i < frames.length) {
         const ref = frames[i];
         const canvas = document.createElement('canvas');
-        if (renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex)) {
+        if (renderDicomToCanvas(ref.dcm, canvas, ref.cfg.ww, ref.cfg.wl, ref.cfg.invert, ref.frameIndex)) {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-          imgHtml = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:${FIT_MODES[cfg.fitMode]};display:block;">`;
+          imgHtml = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:${FIT_MODES[glb.fitMode]};display:block;">`;
         }
       }
       cellsHtml += `<div style="background:${cellBg};overflow:hidden;position:relative;">${imgHtml}</div>`;
     }
 
-    const gutterPx = cfg.gutter;
-    const padTop = state.showAnnotations ? 28 : 4;
-    const padBot = state.showAnnotations ? 18 : 4;
-
+    const gutterPx = glb.gutter;
     sheetsHtml += `<div class="sheet" style="background:${bg};position:relative;aspect-ratio:${aspect};width:100%;max-height:100vh;box-sizing:border-box;${isLast ? '' : 'page-break-after:always;break-after:page;'}">
       ${headerHtml}
       <div style="display:grid;grid-template-columns:repeat(${layout.c},1fr);grid-template-rows:repeat(${layout.r},1fr);gap:${gutterPx}px;width:100%;height:100%;padding:${padTop}px ${gutterPx}px ${padBot}px;box-sizing:border-box;">
@@ -1378,7 +1529,7 @@ async function exportPDF() {
   msg.textContent = 'Preparando filmes...';
   await new Promise(r=>setTimeout(r,50));
 
-  let logoW = 0, logoH = 10;
+  let logoW = 0, logoH = 12;
   let logoData = null, logoFormat = 'JPEG';
   if (clinicLogoDataUrl) {
     const img = new Image();
@@ -1386,30 +1537,42 @@ async function exportPDF() {
     await new Promise(r => { img.onload=r; img.onerror=r; });
     if (img.width && img.height) {
       logoW = (img.width / img.height) * logoH;
+      if (logoW > 45) { logoW = 45; logoH = (img.height / img.width) * logoW; } // Max width
       logoData = clinicLogoDataUrl;
       logoFormat = clinicLogoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
     }
   }
 
+  let footWRaw = 0, footHRaw = 0;
+  let footData = null, footFormat = 'JPEG';
+  if (clinicFooterDataUrl) {
+    const img = new Image();
+    img.src = clinicFooterDataUrl;
+    await new Promise(r => { img.onload=r; img.onerror=r; });
+    if (img.width && img.height) {
+      footWRaw = img.width; footHRaw = img.height;
+      footData = clinicFooterDataUrl;
+      footFormat = clinicFooterDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    }
+  }
+
+
   try {
     const { jsPDF } = window.jspdf;
-    const selectedList = state.series.filter(s=>state.selectedSeries.has(s.uid));
+    
+    const glb = state.globalConfig;
+    const layout = LAYOUTS[glb.layout];
+    const perSheet = layout.c * layout.r;
+    const totalSheets = Math.ceil(state.printDraft.length / perSheet);
+    const filmSize = FILM_SIZES[glb.filmSize];
+
     const pages = [];
-    selectedList.forEach(series => {
-      const cfg = state.configs[series.uid];
-      const layout = LAYOUTS[cfg.layout];
-      const perSheet = layout.c * layout.r;
-      const frames = getSelectedFrames(series, cfg);
-      const totalSheets = Math.max(1, Math.ceil(Math.max(1, frames.length) / perSheet));
-      const filmSize = FILM_SIZES[cfg.filmSize];
-      for (let page = 0; page < totalSheets; page++) {
-        if (!cfg.excludedPages.has(page)) {
-          pages.push({ series, cfg, layout, filmSize, page, totalSheets, frames: frames.slice(page * perSheet, (page + 1) * perSheet) });
-        }
-      }
-    });
+    for (let page = 0; page < totalSheets; page++) {
+      pages.push({ page, totalSheets, frames: state.printDraft.slice(page * perSheet, (page + 1) * perSheet) });
+    }
+
     if (!pages.length) {
-      alert('Nenhuma página para exportar (todas excluídas ou vazias).');
+      alert('Nenhuma página para exportar.');
       msg.textContent = 'Exportação cancelada';
       setTimeout(()=>overlay.classList.remove('active'), 1000);
       return;
@@ -1418,51 +1581,102 @@ async function exportPDF() {
     let pdf = null;
     for (let p = 0; p < pages.length; p++) {
       const pg = pages[p];
-      const { series, cfg, layout, filmSize, frames, page, totalSheets } = pg;
+      const { frames, page, totalSheets } = pg;
       msg.textContent = `Renderizando filme ${p+1}/${pages.length}...`;
       await new Promise(r=>setTimeout(r,20));
 
       let fsW = filmSize.w, fsH = filmSize.h;
-      if (cfg.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
+      if (glb.orientation === 'landscape') { fsW = filmSize.h; fsH = filmSize.w; }
 
       if (!pdf) pdf = new jsPDF({ orientation: fsW > fsH ? 'landscape' : 'portrait', unit:'mm', format:[fsW, fsH] });
       else pdf.addPage([fsW, fsH], fsW > fsH ? 'landscape' : 'portrait');
 
-      const isWhite = cfg.paperColor === 'white';
+      const isWhite = glb.paperColor === 'white';
       if (!isWhite) {
         pdf.setFillColor(0,0,0); pdf.rect(0,0,fsW,fsH,'F');
       }
 
+      const seriesCounts = {};
+      let dominantSeries = frames[0] ? frames[0].series : null;
+      let maxC = 0;
+      frames.forEach(f => {
+         seriesCounts[f.series.uid] = (seriesCounts[f.series.uid] || 0) + 1;
+         if (seriesCounts[f.series.uid] > maxC) { maxC = seriesCounts[f.series.uid]; dominantSeries = f.series; }
+      });
+
       if (state.showAnnotations) {
-        pdf.setFont('courier','normal'); pdf.setFontSize(6); 
-        pdf.setTextColor(isWhite ? 0 : 200);
+        pdf.setDrawColor(0, 51, 102); // #003366
+        pdf.setLineWidth(1.5);
+        pdf.line(0, 1.5, fsW, 1.5);
+
+        pdf.setDrawColor(0, 51, 102);
+        pdf.setLineWidth(0.3);
+        pdf.line(0, 18, fsW, 18);
+
         let leftX = 4;
         if (logoData) {
-          pdf.addImage(logoData, logoFormat, leftX, 1.5, logoW, logoH);
-          leftX += logoW + 2;
+          pdf.addImage(logoData, logoFormat, fsW - 4 - logoW, 3, logoW, logoH);
         }
-        pdf.text(getDisplayInstitution(), leftX, 5);
-        pdf.text(`${getDisplayName()} | ${getDisplayID()}`, fsW - 4, 5, { align:'right' });
-        pdf.text(`${series.modality}: ${getDisplaySeriesDescription(series)} ${state.anonymize ? '' : '| ' + state.study.studyDate}`, 4, fsH - 3);
-        pdf.text(`W:${Math.round(cfg.ww)} L:${Math.round(cfg.wl)} | ${page+1}/${totalSheets}`, fsW - 4, fsH - 3, { align:'right' });
+
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(0, 51, 102); // #003366
+        
+        let py = 6;
+        let lineHeight = 3.5;
+        pdf.text('Nome:', leftX, py); pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal'); pdf.text(getDisplayName(), leftX + 11, py); py += lineHeight;
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold'); pdf.text('CPF:', leftX, py); pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal'); pdf.text(getDisplayID(), leftX + 8, py); py += lineHeight;
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold'); pdf.text('Nasc.:', leftX, py); pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal'); pdf.text(getDisplayBirth(), leftX + 11, py); py += lineHeight;
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold'); pdf.text('Idade:', leftX, py); pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal'); pdf.text(getPatientAge(), leftX + 10, py); py += lineHeight;
+
+        py = 22;
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold'); pdf.setTextColor(isWhite ? 0 : 200);
+        pdf.setFontSize(7);
+        if (dominantSeries) {
+          pdf.text('Procedimento:', leftX, py); pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal'); pdf.text(`${dominantSeries.modality} - ${Object.keys(seriesCounts).length>1 ? 'Múltiplas Séries' : getDisplaySeriesDescription(dominantSeries)}`, leftX + 22, py);
+        }
+        
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'bold');
+        pdf.text('Data do Exame:', fsW - 4 - 35, py); 
+        pdf.setFont(isWhite ? 'helvetica' : 'courier', 'normal');
+        pdf.text(state.study.studyDate, fsW - 4 - 10, py);
+        
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.2);
+        pdf.line(0, fsH - 5, fsW, fsH - 5);
+
+        let finalFootH = 0;
+        if (footData) {
+           finalFootH = (footHRaw / footWRaw) * fsW;
+           pdf.addImage(footData, footFormat, 0, fsH - 5 - finalFootH, fsW, finalFootH);
+        }
+
+        pdf.setFont('courier', 'normal'); pdf.setFontSize(6);
+        pdf.text(`W/L definido por imagem | ${page+1}/${totalSheets}`, fsW - 4, fsH - 2, { align:'right' });
       }
 
-      const gutterMm = cfg.gutter * 0.264583;
-      const margin = state.showAnnotations ? 14 : 3;
-      const gridW = fsW - margin * 2;
-      const gridH = fsH - margin * 2;
+      const gutterMm = glb.gutter * 0.264583;
+      let padTopPdf = 4;
+      let padBotPdf = 4;
+      if (state.showAnnotations) {
+          padTopPdf = 24;
+          padBotPdf = footData ? ( (footHRaw / footWRaw) * fsW + 6 ) : 6;
+      }
+      const marginMm = 4;
+      const gridW = fsW - marginMm * 2;
+      const gridH = fsH - padTopPdf - padBotPdf;
       const cellW = (gridW - gutterMm * (layout.c - 1)) / layout.c;
       const cellH = (gridH - gutterMm * (layout.r - 1)) / layout.r;
-      const fitMode = FIT_MODES[cfg.fitMode];
+      const fitMode = FIT_MODES[glb.fitMode];
 
       for (let i = 0; i < frames.length; i++) {
         const col = i % layout.c;
         const row = Math.floor(i / layout.c);
-        const cellX = margin + col * (cellW + gutterMm);
-        const cellY = margin + row * (cellH + gutterMm);
+        const cellX = marginMm + col * (cellW + gutterMm);
+        const cellY = padTopPdf + row * (cellH + gutterMm);
         const ref = frames[i];
         const canvas = document.createElement('canvas');
-        if (!renderDicomToCanvas(ref.dcm, canvas, cfg.ww, cfg.wl, cfg.invert, ref.frameIndex)) continue;
+        if (!renderDicomToCanvas(ref.dcm, canvas, ref.cfg.ww, ref.cfg.wl, ref.cfg.invert, ref.frameIndex)) continue;
         let rect;
         if (fitMode === 'contain') rect = calcContain(cellW, cellH, canvas.width, canvas.height);
         else if (fitMode === 'cover') rect = calcCover(cellW, cellH, canvas.width, canvas.height);
